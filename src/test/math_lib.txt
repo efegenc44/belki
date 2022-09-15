@@ -1,0 +1,9 @@
+// print(math.pow(3, 4))
+// print(math.sqrt(2))
+
+let word = "Merhaba"
+let i = 0
+while i < len(word) {
+    print(word[i])
+    i = i + 1
+}

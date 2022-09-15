@@ -1,0 +1,20 @@
+fun fact(n) {
+    if n <= 1 {
+        return 1
+    }
+    return n * fact(n-1)
+}
+
+// print(fact(9)) // 10 stackoverflow :(
+
+fun fact2(n) {
+    let res = 1
+    let i = 2
+    while i <= n {
+        res = res * i
+        i = i + 1
+    }
+    return res
+}
+
+print(fact2(12)) // 13 -> multiplication overflow

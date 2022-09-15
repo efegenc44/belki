@@ -1,0 +1,16 @@
+import "test2.txt"
+
+let o = test2.A(7)
+
+fun set(obj, n) {
+    obj.d = n
+}
+
+// print o.d
+set(o, 10)
+if o.d != 10 {
+    test2.name()
+}
+o.f()
+print(test2.name(3)())
+
