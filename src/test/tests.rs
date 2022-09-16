@@ -41,4 +41,10 @@ mod tests {
         let res = crate::from_file(String::from("src/test/while_loop.txt"));
         assert!(res != None);
     }
+
+    #[test]
+    fn fizzbuzz_step() {
+        let res = crate::from_file(String::from("src/test/fizzbuzz_step.txt"));
+        assert!(res != None);
+    }
 }

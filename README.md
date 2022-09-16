@@ -7,6 +7,7 @@ WIP dynamically typed, interpreted programming language.
 - A Name
 - Better REPL
 - VSCode Extension
+- Arbitrary return, break and continue statements
 - Refactoring
 - Error handling
 - Error messages
