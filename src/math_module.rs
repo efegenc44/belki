@@ -25,6 +25,9 @@ pub fn init(interpreter: &mut Interpreter) {
                 Value::Int(i) => {
                     return Ok(Value::Float(f32::sqrt(i as f32)));
                 },
+                Value::Float(f) => {
+                    return Ok(Value::Float(f32::sqrt(f)));
+                },
                 _ => Err(RuntimeError::TypeMismatch)
             }
         } 

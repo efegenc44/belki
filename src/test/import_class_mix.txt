@@ -1,0 +1,18 @@
+import "src/test/class_a.txt"
+
+let o = class_a.A(7)
+
+assert(o.d == 7)
+assert(class_a.c == "c")
+
+fun set(obj, n) {
+    obj.d = n
+}
+
+set(o, 10)
+assert(o.f() == 10)
+
+o.set(20)
+assert(o.f() == 20)
+
+

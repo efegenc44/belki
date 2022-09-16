@@ -1,13 +1,14 @@
-fun fact(n) {
+fun fact_recursive(n) {
     if n <= 1 {
         return 1
     }
-    return n * fact(n-1)
+    return n * fact_recursive(n-1)
 }
 
-// print(fact(10)) // 10 stackoverflow :(
+assert(fact_recursive(9) == 362880) 
+// 10 stackoverflows
 
-fun fact2(n) {
+fun fact_while(n) {
     let res = 1
     let i = 2
     while i <= n {
@@ -17,4 +18,5 @@ fun fact2(n) {
     return res
 }
 
-print(fact2(12)) // 13 -> multiplication overflow
+assert(fact_while(12) == 479001600) 
+// 13 -> multiplication overflow

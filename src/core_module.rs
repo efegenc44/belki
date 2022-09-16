@@ -61,4 +61,17 @@ pub fn init(interpreter: &mut Interpreter) {
             }
         } 
     ));
+
+    interpreter.add_native_function(NativeFunction::new( 
+        String::from("assert"), 
+        1,
+        |_, args| {
+            match args[0] {
+                Value::Bool(t) =>
+                    if !t { Err(RuntimeError::AssertionFailure) }
+                    else { Ok(Value::None) },
+                _ => Err(RuntimeError::TypeMismatch)
+            } 
+        } 
+    ));
 }

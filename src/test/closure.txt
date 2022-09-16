@@ -1,0 +1,11 @@
+fun closure(a) {
+    fun inner() {
+        return a
+    }
+    return inner
+}
+
+let a = 45
+let res = closure(23)()
+assert(res != 45)
+assert(res == 23)

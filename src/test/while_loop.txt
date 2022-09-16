@@ -1,0 +1,8 @@
+let word = "Hello" 
+let list = ["H", "e", "l", "l", "o"]
+
+let i = 0
+while i < len(word) { 
+    assert(word[i] == list[i])
+    i = i + 1
+}

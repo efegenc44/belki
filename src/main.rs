@@ -12,6 +12,7 @@ mod parser;
 mod ast;
 mod value;
 mod interpreter;
+mod test;
 
 fn repl() {
     let mut interpreter = interpreter::Interpreter::new();
@@ -55,7 +56,7 @@ fn repl() {
     }
 }
 
-fn from_file(path: String) {
+fn from_file(path: String) -> Option<()> {
     let source = fs::read_to_string(path)
         .expect("File read error");     
     
@@ -63,8 +64,8 @@ fn from_file(path: String) {
     let tokens = match lexer.tokens() {
         Ok(tokens) => tokens,
         Err(error) => {
-            println!("{:?}", error);
-            exit(0)
+            println!("{:?}", error); 
+            return None;
         }
     };
 
@@ -72,18 +73,17 @@ fn from_file(path: String) {
     let node = match parser.parse() {
         Ok(node) => node,
         Err(error) => {
-            println!("{:?}", error);
-            exit(0)
+            println!("{:?}", error); 
+            return None;
         }
     };
     let mut interpreter = interpreter::Interpreter::new();
     interpreter.init();
     
     match interpreter.eval(node) {
-        Ok(_) => {},
+        Ok(_) => Some(()),
         Err(error) => {
-            println!("{:?}", error);
-            exit(0)
+            println!("{:?}", error); None 
         }
     }
 }
@@ -95,7 +95,9 @@ fn main() {
         repl();
     } 
     else if len == 2 {
-        from_file(args[1].clone());
+        if let None = from_file(args[1].clone()) {
+            exit(0);
+        }
     } 
     else {
         println!("Usage: ./<name> <file-path>");

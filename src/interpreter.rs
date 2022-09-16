@@ -22,6 +22,7 @@ pub enum RuntimeError {
     AbsendThisError,
     AlreadyDefinedVarible,
     DivisionByZero,
+    AssertionFailure,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -307,7 +308,9 @@ impl Interpreter {
                 self.mod_id += 1;
                 self.current_scope = Scope::new();
                 self.current_scope.env.insert(
-                    path.split(".").collect::<Vec<_>>()[0].to_string(), 
+                    path
+                    .split("/").collect::<Vec<_>>().last().unwrap().to_string()    
+                    .split(".").collect::<Vec<_>>()[0].to_string(), 
                     Value::Module(id)
                 );
                 Ok(Value::None)
@@ -448,10 +451,13 @@ impl Interpreter {
                     }
                     "!=" => match (lhs_value, rhs_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a != b)),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a != b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
                     "==" => match (lhs_value, rhs_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a == b)),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a == b)),
+                        (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     }
                     "||" => match (lhs_value, rhs_value) {
