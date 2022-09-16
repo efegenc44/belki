@@ -1,5 +1,10 @@
 use crate::token::{ TokenKind, Token, Location };
-use crate::error::report;
+
+#[derive(Debug)]
+pub enum LexError {
+    UnexpectedCharacter,
+    UnknownCharacter,
+}
 
 pub struct Lexer {
     source: String,
@@ -27,6 +32,7 @@ impl Lexer {
     }
 
     fn next(&mut self) -> char {
+        self.row += 1; 
         self.current += 1;
         self.source.as_bytes()[self.current - 1] as char
     }
@@ -39,7 +45,7 @@ impl Lexer {
         }
     }
 
-    fn number(&mut self) -> Token {
+    fn number(&mut self) -> Result<Token, LexError> {
         let mut token_kind = TokenKind::INTEGER;
         while self.peek().is_digit(10) {
             self.next();
@@ -53,17 +59,13 @@ impl Lexer {
         }
 
         if self.peek().is_alphabetic() {
-            report(self.get_loc(), "Invalid Number Literal");
+            return Err(LexError::UnexpectedCharacter);
         }
         
-        Token::new(
-            token_kind, 
-            self.source[self.start..self.current].to_string(),
-            self.get_loc()
-        )
+        Ok(self.make_token(token_kind))
     }
 
-    fn identifier(&mut self) -> Token {
+    fn identifier(&mut self) -> Result<Token, LexError> {
         while self.peek().is_alphanumeric() || self.peek() == '_' {
             self.next();          
         }
@@ -76,7 +78,6 @@ impl Lexer {
             "true"    => TokenKind::TRUE,
             "false"   => TokenKind::FALSE,
             "nothing" => TokenKind::NOTHING,
-            // "print"   => TokenKind::PRINT,
             "if"      => TokenKind::IF,
             "else"    => TokenKind::ELSE,
             "while"   => TokenKind::WHILE,
@@ -85,10 +86,10 @@ impl Lexer {
             _         => TokenKind::IDENTIFIER
         };
 
-        Token::new(token_kind, text.to_string(), self.get_loc())
+        Ok(self.make_token(token_kind))
     }
 
-    fn string(&mut self) -> Token {
+    fn string(&mut self) -> Result<Token, LexError> {
         while !(self.peek() == '\n' 
             || self.peek() == '\0'
             || self.peek() == '"') 
@@ -97,14 +98,14 @@ impl Lexer {
         }
         // Closing '"'.
         if !self.expect('"') {
-            report(self.get_loc(), "Unterminated String");
+            return Err(LexError::UnexpectedCharacter);
         }
 
-        Token::new(
+        Ok(Token::new(
             TokenKind::STRING, 
             self.source[self.start+1..self.current-1].to_string(),
             self.get_loc()
-        )
+        ))
     }
 
     fn get_text(&mut self) -> String {
@@ -115,8 +116,12 @@ impl Lexer {
         Location::new(self.row, self.col)
     }
 
-    pub fn scan_token(&mut self) -> Token {
-        self.row += 1; self.start = self.current;
+    fn make_token(&mut self, kind: TokenKind) -> Token {
+        Token::new(kind, self.get_text(), self.get_loc())
+    }
+
+    pub fn scan_token(&mut self) -> Result<Token, LexError> {
+        self.start = self.current;
         
         let c = self.next();
 
@@ -129,100 +134,76 @@ impl Lexer {
         }
 
         match c {
-            '('  => Token::new(TokenKind::LPAREN    , self.get_text(), self.get_loc()),
-            ')'  => Token::new(TokenKind::RPAREN    , self.get_text(), self.get_loc()),
-            '{'  => Token::new(TokenKind::LCURLY    , self.get_text(), self.get_loc()),
-            '}'  => Token::new(TokenKind::RCURLY    , self.get_text(), self.get_loc()),
-            '['  => Token::new(TokenKind::LSQUARE   , self.get_text(), self.get_loc()),
-            ']'  => Token::new(TokenKind::RSQUARE   , self.get_text(), self.get_loc()),
-            ':'  => Token::new(TokenKind::COLON     , self.get_text(), self.get_loc()),
-            ';'  => Token::new(TokenKind::SEMICOLON , self.get_text(), self.get_loc()),
-            '+'  => Token::new(TokenKind::PLUS      , self.get_text(), self.get_loc()),
-            '*'  => Token::new(TokenKind::STAR      , self.get_text(), self.get_loc()),
-            '%'  => Token::new(TokenKind::PERCENT   , self.get_text(), self.get_loc()),
-            '^'  => Token::new(TokenKind::CARET     , self.get_text(), self.get_loc()),
-            ','  => Token::new(TokenKind::COMMA     , self.get_text(), self.get_loc()),
-            '.'  => Token::new(TokenKind::DOT       , self.get_text(), self.get_loc()),
-            '\0' => Token::new(TokenKind::END       , self.get_text(), self.get_loc()),
-            '_'  => Token::new(TokenKind::UNDERSCORE, self.get_text(), self.get_loc()),
-            '-' => {
-                if self.expect('>')
-                    { Token::new(TokenKind::ARROW, self.get_text(), self.get_loc()) } 
-                else 
-                    { Token::new(TokenKind::MINUS, self.get_text(), self.get_loc()) }
-            },
-            '&' => {
-                if self.expect('&')
-                    { Token::new(TokenKind::DAMPERSAND, self.get_text(), self.get_loc()) } 
-                else 
-                    { Token::new(TokenKind::AMPERSAND, self.get_text(), self.get_loc()) }
-            },
+            '('  => Ok(self.make_token(TokenKind::LPAREN    )),
+            ')'  => Ok(self.make_token(TokenKind::RPAREN    )),
+            '{'  => Ok(self.make_token(TokenKind::LCURLY    )),
+            '}'  => Ok(self.make_token(TokenKind::RCURLY    )),
+            '['  => Ok(self.make_token(TokenKind::LSQUARE   )),
+            ']'  => Ok(self.make_token(TokenKind::RSQUARE   )),
+            ':'  => Ok(self.make_token(TokenKind::COLON     )),
+            ';'  => Ok(self.make_token(TokenKind::SEMICOLON )),
+            '+'  => Ok(self.make_token(TokenKind::PLUS      )),
+            '*'  => Ok(self.make_token(TokenKind::STAR      )),
+            '%'  => Ok(self.make_token(TokenKind::PERCENT   )),
+            '^'  => Ok(self.make_token(TokenKind::CARET     )),
+            ','  => Ok(self.make_token(TokenKind::COMMA     )),
+            '.'  => Ok(self.make_token(TokenKind::DOT       )),
+            '\0' => Ok(self.make_token(TokenKind::END       )),
+            '_'  => Ok(self.make_token(TokenKind::UNDERSCORE)),
+            '-' => 
+                if self.expect('>') { Ok(self.make_token(TokenKind::ARROW)) } 
+                else { Ok(self.make_token(TokenKind::MINUS)) }
+            '&' =>
+                if self.expect('&') { Ok(self.make_token(TokenKind::DAMPERSAND)) } 
+                else { Ok(self.make_token(TokenKind::AMPERSAND)) }
             '|' => 
-                if self.expect('|')
-                    { Token::new(TokenKind::DVLINE, self.get_text(), self.get_loc()) } 
-                else if self.expect('>') {
-                    Token::new(TokenKind::PIPE, self.get_text(), self.get_loc())
-                } else { 
-                    Token::new(TokenKind::VLINE, self.get_text(), self.get_loc()) 
-                },
-            '>' => {
-                if self.expect('=')
-                    { Token::new(TokenKind::GREATEREQUAL, self.get_text(), self.get_loc()) } 
-                else 
-                    { Token::new(TokenKind::GREATER, self.get_text(), self.get_loc()) }
-            },
-            '<' => {
-                if self.expect('=')
-                    { Token::new(TokenKind::LESSEQUAL, self.get_text(), self.get_loc()) } 
-                else 
-                    { Token::new(TokenKind::LESS, self.get_text(), self.get_loc()) }
-            },
-            '!' => {
-                if self.expect('=')
-                    { Token::new(TokenKind::BANGEQUAL, self.get_text(), self.get_loc()) } 
-                else 
-                    { Token::new(TokenKind::BANG, self.get_text(), self.get_loc()) }
-            },
-            '=' => if self.expect('=') { 
-                Token::new(TokenKind::DEQUAL, self.get_text(), self.get_loc()) 
-            } else { 
-                Token::new(TokenKind::EQUAL, self.get_text(), self.get_loc()) 
-            },
-            '/' => if self.expect('/') {
-                while !(self.peek() == '\n'  
-                    || self.peek() == '\0') {
-                        self.next();
+                if self.expect('|') { Ok(self.make_token(TokenKind::DVLINE)) } 
+                else if self.expect('>') { Ok(self.make_token(TokenKind::PIPE)) } 
+                else { Ok(self.make_token(TokenKind::VLINE)) },
+            '>' => 
+                if self.expect('=') { Ok(self.make_token(TokenKind::GREATEREQUAL)) } 
+                else { Ok(self.make_token(TokenKind::GREATER)) }
+            '<' => 
+                if self.expect('=') { Ok(self.make_token(TokenKind::LESSEQUAL)) } 
+                else { Ok(self.make_token(TokenKind::LESS)) }
+            '!' => 
+                if self.expect('=') { Ok(self.make_token(TokenKind::BANGEQUAL)) } 
+                else { Ok(self.make_token(TokenKind::BANG)) }
+            '=' => 
+                if self.expect('=') { Ok(self.make_token(TokenKind::DEQUAL)) } 
+                else { Ok(self.make_token(TokenKind::EQUAL)) }
+            '/' => 
+                if self.expect('/') {
+                    while !(self.peek() == '\n'  
+                        || self.peek() == '\0') {
+                            self.next();
                     } 
-                Token::new(TokenKind::COMMENT, self.source[self.start+2..self.current].to_string(), self.get_loc())
-            } else {
-                Token::new(TokenKind::SLASH, self.get_text(), self.get_loc())
-            },
-            ' ' | '\t' | '\r' => Token::new(TokenKind::WHITESPACE, self.get_text(), self.get_loc()), 
+                    Ok(Token::new(TokenKind::COMMENT, self.source[self.start+2..self.current].to_string(), self.get_loc()))
+                } else { Ok(self.make_token(TokenKind::SLASH)) }
+            ' ' | '\t' | '\r' => Ok(self.make_token(TokenKind::WHITESPACE)), 
             '\n' => {
                 self.col += 1;
                 self.row = 0;
-                Token::new(TokenKind::NEWLINE, self.get_text(), self.get_loc())
+                Ok(self.make_token(TokenKind::NEWLINE))
             }
             _ => {
-                report(self.get_loc(), "Unknown Character");
-                Token::new(TokenKind::END, self.get_text(), self.get_loc())
+                Err(LexError::UnknownCharacter)
             },
 
         }
     }
 
-    pub fn tokens(&mut self) -> Vec<Token> {
+    pub fn tokens(&mut self) -> Result<Vec<Token>, LexError> {
         let mut tokens: Vec<Token> = vec![];
         
-        let mut token = self.scan_token();
+        let mut token = self.scan_token()?;
         while !(token.kind == TokenKind::END) {
             if token.kind != TokenKind::WHITESPACE &&
                 token.kind != TokenKind::COMMENT &&
                 token.kind != TokenKind::NEWLINE {
                     tokens.push(token);
                 }
-            token = self.scan_token();
-             
+            token = self.scan_token()?;
         }
         tokens.push(Token::new(
             TokenKind::END,
@@ -230,7 +211,7 @@ impl Lexer {
             self.get_loc()
         ));
         
-        tokens 
+        Ok(tokens) 
     }
 
 }

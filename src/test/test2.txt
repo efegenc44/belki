@@ -19,3 +19,6 @@ fun name(a) {
     }
     return inner
 }
+
+let a = "Merhaba";
+print(name(4)())

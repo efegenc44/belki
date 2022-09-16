@@ -1,9 +1,7 @@
 use std::env;
 use std::io::{ stdin, stdout, Write };
 use std::fs;
-
-#[allow(unused_imports)]
-use std::thread;
+use std::process::exit;
 
 mod math_module;
 mod core_module;
@@ -14,7 +12,6 @@ mod parser;
 mod ast;
 mod value;
 mod interpreter;
-mod error;
 
 fn repl() {
     let mut interpreter = interpreter::Interpreter::new();
@@ -29,17 +26,32 @@ fn repl() {
             break
         } 
     
-        // Lexing.
         let mut lexer = lexer::Lexer::new(line);
-        let tokens = lexer.tokens();
+        let tokens = match lexer.tokens() {
+            Ok(tokens) => tokens,
+            Err(error) => {
+                println!("{:?}", error);
+                continue;
+            }
+        };
     
-        // Parsing
         let mut parser = parser::Parser::new(tokens);
-        let node = parser.parse();
+        let node = match parser.parse() {
+            Ok(node) => node,
+            Err(error) => {
+                println!("{:?}", error);
+                continue;
+            }
+        };
         // node.print(0);
     
-        // Evaluating
-        interpreter.eval(node);
+        match interpreter.eval(node) {
+            Ok(_) => {}
+            Err(error) => {
+                println!("{:?}", error);
+                continue;
+            }
+        }
     }
 }
 
@@ -48,21 +60,32 @@ fn from_file(path: String) {
         .expect("File read error");     
     
     let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokens();
+    let tokens = match lexer.tokens() {
+        Ok(tokens) => tokens,
+        Err(error) => {
+            println!("{:?}", error);
+            exit(0)
+        }
+    };
 
     let mut parser = parser::Parser::new(tokens);
-    let node = parser.parse();
-    // node.print(0);
-    
+    let node = match parser.parse() {
+        Ok(node) => node,
+        Err(error) => {
+            println!("{:?}", error);
+            exit(0)
+        }
+    };
     let mut interpreter = interpreter::Interpreter::new();
     interpreter.init();
     
-    // let child = thread::Builder::new().stack_size(32 * 1024 * 1024).spawn(move || { 
-    //     interpreter.eval(node);
-    // }).unwrap(); 
-
-    // child.join().unwrap();
-    interpreter.eval(node);
+    match interpreter.eval(node) {
+        Ok(_) => {},
+        Err(error) => {
+            println!("{:?}", error);
+            exit(0)
+        }
+    }
 }
 
 fn main() {
@@ -75,6 +98,6 @@ fn main() {
         from_file(args[1].clone());
     } 
     else {
-        println!("Usage: ./main <file-path>");
+        println!("Usage: ./<name> <file-path>");
     }
 }

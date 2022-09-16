@@ -17,7 +17,7 @@ pub enum TokenKind {
 
     // Keywords.
     CLASS, LET, FUN, TRUE, FALSE, 
-    NOTHING, PRINT, IF, ELSE, 
+    NOTHING, IF, ELSE, 
     WHILE, IMPORT, RETURN,   
 
     // WS Tokens.

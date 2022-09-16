@@ -5,7 +5,7 @@ fun fact(n) {
     return n * fact(n-1)
 }
 
-// print(fact(9)) // 10 stackoverflow :(
+// print(fact(10)) // 10 stackoverflow :(
 
 fun fact2(n) {
     let res = 1

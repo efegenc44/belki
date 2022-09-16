@@ -1,14 +1,20 @@
+
+#[derive(PartialEq)]
 #[allow(dead_code)]
-enum Type {
+pub enum Type {
     Int,
     Float,
     Bool,
     String,
     List,
-    Custom(String),
+    Custom(u64),
     Function,
+    Module,
+    ClassDef(u64),
+    Method(u64, String),
 
-    Unit
+    Unit,
+    Void
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,4 +33,26 @@ pub enum Value {
     
     Nothing, // Unit
     None,    // Void
+}
+
+impl Value {
+    #[allow(dead_code)]
+    fn get_type(&self) -> Type {
+        match self {
+            Value::Int(_)                   => Type::Int,
+            Value::Float(_)                 => Type::Float,
+            Value::Bool(_)                  => Type::Bool,
+            Value::String(_)                => Type::String,
+            Value::List(_)                  => Type::List,
+            Value::Instance(cid, _)   => Type::Custom(*cid),
+            Value::Function(_)              => Type::Function,
+            Value::NativeFunction(_)        => Type::Function,
+            Value::Module(_)                => Type::Module,
+            Value::ClassD(cid)        => Type::ClassDef(*cid),
+            Value::Method(_, 
+                cid, name)   => Type::Method(*cid, name.clone()),
+            Value::Nothing                  => Type::Unit,
+            Value::None                     => Type::Void
+        }
+    }
 }

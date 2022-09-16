@@ -57,7 +57,6 @@ pub enum Node {
     True,
     False,
     Nothing,
-    Print(Box<Node>),
     None
 }
 
@@ -197,10 +196,6 @@ impl Node {
             Node::Nothing => {
                 println!("Nothing");        
             },
-            Node::Print(expr) => {
-                println!("print");        
-                expr.print(indent + 1);
-            }
             Node::None => { 
                 println!("None") 
             }
