@@ -1,0 +1,15 @@
+fun get_index(word, char) {
+    let i = 0
+    while i < len(word) {
+        if word[i] == char {
+            return i
+        }
+        i = i + 1
+    }
+}
+
+assert(get_index("hello", "o") == 4)
+assert(get_index("hello", "h") == 0)
+assert(get_index("hello", "e") == 1)
+assert(get_index("hello", "l") == 2)
+assert(get_index("hello", "l") != 3)

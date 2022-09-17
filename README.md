@@ -6,12 +6,14 @@ WIP dynamically typed, interpreted programming language.
 
 - A Name
 - Better REPL
+- Anonymous functions
 - VSCode Extension
 - Arbitrary return, break and continue statements
 - Refactoring
 - Error handling
 - Error messages
 - Better error messages
+- Add tests for errors
 - RTTI support
 - Range values and types
 - Ad hoc polymorphism (type coercion)

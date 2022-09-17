@@ -1,0 +1,11 @@
+fun return_block() {
+    {
+        {
+            return "Merhaba"
+            return "Hello"
+        }
+    }
+}
+
+assert(return_block() == "Merhaba")
+assert(!(return_block() == "Hello"))

@@ -4,6 +4,7 @@ use crate::ast::Node;
 #[derive(Debug)]
 pub enum ParseError {
     UnexpectedToken,
+    ReturnOutsideFunction,
     IllDefinedAST
 }
 
@@ -52,11 +53,12 @@ pub enum ParseError {
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
+    inside_function: usize
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Parser {
-        Parser { tokens, current: 0 }
+        Parser { tokens, current: 0, inside_function: 0 }
     }
 
     fn next(&mut self) -> Token {
@@ -359,6 +361,9 @@ impl Parser {
     }
 
     fn return_statement(&mut self) -> Result<Node, ParseError> {
+        if self.inside_function == 0 {
+            return Err(ParseError::ReturnOutsideFunction);
+        }
         self.consume(TokenKind::RETURN)?;
         Ok(Node::Return(Box::new(self.expression()?)))
     }
@@ -387,11 +392,13 @@ impl Parser {
     }
 
     fn fun_block(&mut self) -> Result<Node, ParseError> {
+        self.inside_function += 1;
         self.consume(TokenKind::LCURLY)?;
         let mut statements: Vec<Node> = vec![];
         while !self.expect(TokenKind::RCURLY) {
             statements.push(self.statement()?);
         }
+        self.inside_function -= 1;
         Ok(Node::FunBlock(statements))
     }
 

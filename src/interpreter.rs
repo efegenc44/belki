@@ -261,7 +261,10 @@ impl Interpreter {
             Node::Block(statements) => {
                 self.enter_scope();
                 for statement in statements {
-                    self.eval(statement)?;
+                    match self.return_val {
+                        Value::None => {self.eval(statement)?;},
+                        _ => break,   
+                    }
                 }
                 self.exit_scope(); 
                 Ok(Value::None)
@@ -391,17 +394,18 @@ impl Interpreter {
                 }
             },
             Node::While { expr, body } => {
-                loop {
+                while self.return_val == Value::None {
                     let val = self.eval(*expr.clone())?;
                     match val {
                         Value::Bool(t) => {
                             if t {
                                 assert!(self.eval(*body.clone()).unwrap() == Value::None, "While didn't returned None");
-                            } else { break Ok(Value::None) }
+                            } else { return Ok(Value::None) }
                         },
-                        _ => break Err(RuntimeError::TypeMismatch)
+                        _ => return Err(RuntimeError::TypeMismatch)
                     }
                 }
+                Ok(Value::None)
             },
             Node::Binary { op, lhs, rhs } => {
                 let lhs_value = self.eval(*lhs.clone())?;

@@ -47,4 +47,22 @@ mod tests {
         let res = crate::from_file(String::from("src/test/fizzbuzz_step.txt"));
         assert!(res != None);
     }
+
+    #[test]
+    fn return_while() {
+        let res = crate::from_file(String::from("src/test/return_while.txt"));
+        assert!(res != None);
+    }
+
+    #[test]
+    fn return_if() {
+        let res = crate::from_file(String::from("src/test/return_if.txt"));
+        assert!(res != None);
+    }
+
+    #[test]
+    fn return_block() {
+        let res = crate::from_file(String::from("src/test/return_block.txt"));
+        assert!(res != None);
+    }
 }
