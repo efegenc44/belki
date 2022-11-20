@@ -43,8 +43,8 @@ pub enum ParseError {
 //                       | 'false'
 //                       | 'nothing'
 //                       | <product> '.' <identifier>
-//                       | <product> '(' (<expression>',')* [<expression>] ')'
-//                       | <product> '[' <expression> ']' 
+//                       | <product> ?no newline? '(' (<expression>',')* [<expression>] ')'
+//                       | <product> ?no newline? '[' <expression> ']' 
 //                       | '[' (<expression> ',')* [<expression>] ']' 
 
 
@@ -62,16 +62,28 @@ impl Parser {
     }
 
     fn next(&mut self) -> Token {
+        self.skip_newline();
         self.current += 1;
         self.tokens[self.current - 1].clone()
     }
 
-    fn peek(&self) -> Token {
+    fn skip_newline(&mut self) {
+        while self.tokens[self.current].kind == TokenKind::NEWLINE {
+            self.current += 1;
+        }
+    }
+
+    fn peek(&mut self) -> Token {
+        self.skip_newline();
+        self.tokens[self.current].clone()    
+    }
+
+    fn peek_also_nl(&self) -> Token {
         self.tokens[self.current].clone()    
     }
 
     #[allow(dead_code)]
-    fn get_loc(&self) -> Location {
+    fn get_loc(&mut self) -> Location {
         self.peek().loc
     }
 
@@ -149,11 +161,47 @@ impl Parser {
                 }
                 node = Node::List(elements);
             }            
-                
-            _ => {return Err(ParseError::IllDefinedAST);}
+            _ => {
+                dbg!(t);
+                return Err(ParseError::IllDefinedAST);
+            }
         }
         
         loop {
+            
+            let ntnl = self.peek_also_nl();
+            match ntnl.kind {
+                TokenKind::LSQUARE => {
+                    self.consume(TokenKind::LSQUARE)?;
+                    let rhs = self.expression()?;
+                    self.consume(TokenKind::RSQUARE)?;
+    
+                    node = Node::Binary { 
+                        op: ntnl.text, 
+                        lhs: Box::new(node),
+                        rhs: Box::new(rhs), 
+                    };
+                    continue;
+                },
+                TokenKind::LPAREN => {
+                    self.consume(TokenKind::LPAREN)?;
+                    let mut args: Vec<Node> = vec![];
+                    if !self.expect(TokenKind::RPAREN) {
+                        args.push(self.expression()?);
+                        while !self.expect(TokenKind::RPAREN) {
+                            self.consume(TokenKind::COMMA)?;
+                            args.push(self.expression()?)
+                        }
+                    }
+    
+                    node = Node::FunCall { 
+                        fun: Box::new(node), 
+                        args: args
+                    };
+                    continue;
+                },
+                _ => {}
+            }     
             let nt = self.peek();
             match nt.kind {
                 TokenKind::DOT => {
@@ -166,37 +214,11 @@ impl Parser {
                         op: nt.text, 
                         lhs: Box::new(node),
                         rhs: Box::new(rhs), 
-                    }
-                },
-                TokenKind::LSQUARE => {
-                    self.consume(TokenKind::LSQUARE)?;
-                    let rhs = self.expression()?;
-                    self.consume(TokenKind::RSQUARE)?;
-
-                    node = Node::Binary { 
-                        op: nt.text, 
-                        lhs: Box::new(node),
-                        rhs: Box::new(rhs), 
-                    }
-                },
-                TokenKind::LPAREN => {
-                    self.consume(TokenKind::LPAREN)?;
-                    let mut args: Vec<Node> = vec![];
-                    if !self.expect(TokenKind::RPAREN) {
-                        args.push(self.expression()?);
-                        while !self.expect(TokenKind::RPAREN) {
-                            self.consume(TokenKind::COMMA)?;
-                            args.push(self.expression()?)
-                        }
-                    }
-
-                    node = Node::FunCall { 
-                        fun: Box::new(node), 
-                        args: args
-                    }
+                    };
+                    continue;
                 },
                 _ => break
-            }     
+            }
         }
         Ok(node)
     }
@@ -209,7 +231,8 @@ impl Parser {
                       self.peek().kind == TokenKind::SLASH ||
                       self.peek().kind == TokenKind::PERCENT {
                         let op = self.peek().text; 
-                        self.consume(self.peek().kind)?;
+                        let t = self.peek().clone();
+                        self.consume(t.kind)?;
                         let rhs = self.product()?;
                         lhs = Node::Binary {
                             op: op,
@@ -231,7 +254,8 @@ impl Parser {
                       self.peek().kind == TokenKind::PLUS  || 
                       self.peek().kind == TokenKind::PIPE {
                         let op = self.peek().text; 
-                        self.consume(self.peek().kind)?;
+                        let t = self.peek().clone();
+                        self.consume(t.kind)?;
                         let rhs = self.term()?;
                         lhs = Node::Binary {
                             op: op,
@@ -255,7 +279,8 @@ impl Parser {
             TokenKind::LESS         |
             TokenKind::LESSEQUAL    => {
                 let op = self.peek().text;
-                self.consume(self.peek().kind)?;
+                let t = self.peek().clone();
+                self.consume(t.kind)?;
                 let rhs = self.arithmetic()?;
                 Ok(Node::Binary { 
                     op: op, 
@@ -274,7 +299,8 @@ impl Parser {
                 while self.peek().kind == TokenKind::DVLINE || 
                       self.peek().kind == TokenKind::DAMPERSAND {
                         let op = self.peek().text; 
-                        self.consume(self.peek().kind)?;
+                        let t = self.peek().clone();
+                        self.consume(t.kind)?;
                         let rhs = self.relation()?;
                         lhs = Node::Binary {
                             op: op,
@@ -373,7 +399,6 @@ impl Parser {
         let name = self.consume(TokenKind::IDENTIFIER)?.text;
         self.consume(TokenKind::EQUAL)?;
         let expr = Box::new(self.expression()?);
-        self.expect(TokenKind::SEMICOLON);
         Ok(Node::Let { name, expr })  
     }
 
@@ -403,17 +428,19 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Node, ParseError> {
-        match self.peek().kind {
-            TokenKind::LCURLY => Ok(self.block()?),
-            TokenKind::LET    => Ok(self.let_statement()?),
-            TokenKind::RETURN => Ok(self.return_statement()?),
-            TokenKind::CLASS  => Ok(self.class_declaration()?),
-            TokenKind::FUN    => Ok(self.fun_declaration()?),
-            TokenKind::IF     => Ok(self.if_statement()?),
-            TokenKind::WHILE  => Ok(self.while_statement()?),
-            TokenKind::IMPORT => Ok(self.import_statement()?),
-            _                 => Ok(self.expression()?)
-        }
+        let node = match self.peek().kind {
+            TokenKind::LCURLY => self.block()?,
+            TokenKind::LET    => self.let_statement()?,
+            TokenKind::RETURN => self.return_statement()?,
+            TokenKind::CLASS  => self.class_declaration()?,
+            TokenKind::FUN    => self.fun_declaration()?,
+            TokenKind::IF     => self.if_statement()?,
+            TokenKind::WHILE  => self.while_statement()?,
+            TokenKind::IMPORT => self.import_statement()?,
+            _                 => self.expression()?,
+        };
+        self.expect(TokenKind::SEMICOLON);
+        Ok(node)
     }
 
     fn program(&mut self) -> Result<Node, ParseError> {

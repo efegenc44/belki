@@ -458,11 +458,17 @@ impl Interpreter {
                         (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a != b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
-                    "==" => match (lhs_value, rhs_value) {
+                    "==" => match (lhs_value.clone(), rhs_value.clone()) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a == b)),
                         (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a == b)),
                         (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
-                        _ => Err(RuntimeError::TypeMismatch)
+                        _ => {
+                            if std::mem::discriminant(&lhs_value) != 
+                                std::mem::discriminant(&rhs_value) {
+                                    return Ok(Value::Bool(false));
+                                }
+                            Err(RuntimeError::TypeMismatch)
+                        }
                     }
                     "||" => match (lhs_value, rhs_value) {
                         (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a || b)),

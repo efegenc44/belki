@@ -199,8 +199,7 @@ impl Lexer {
         let mut token = self.scan_token()?;
         while !(token.kind == TokenKind::END) {
             if token.kind != TokenKind::WHITESPACE &&
-                token.kind != TokenKind::COMMENT &&
-                token.kind != TokenKind::NEWLINE {
+                token.kind != TokenKind::COMMENT {
                     tokens.push(token);
                 }
             token = self.scan_token()?;

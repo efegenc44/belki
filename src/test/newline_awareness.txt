@@ -1,0 +1,18 @@
+let a = 4
+(3+5)
+assert(a == 4)
+
+let b = ["a", "b"]
+[1]
+assert(!(b == "b"))
+
+fun add_wrapper(b) {
+    fun add(a) {
+        return a + b
+    }
+    return add
+}
+
+let f = add_wrapper(5)
+(3)
+assert(!(f == 8))

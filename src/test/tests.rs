@@ -65,4 +65,10 @@ mod tests {
         let res = crate::from_file(String::from("src/test/return_block.txt"));
         assert!(res != None);
     }
+
+    #[test]
+    fn newline_awareness() {
+        let res = crate::from_file(String::from("src/test/newline_awareness.txt"));
+        assert!(res != None);
+    }
 }
