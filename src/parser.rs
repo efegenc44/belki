@@ -1,6 +1,8 @@
 use crate::token::{ Token, TokenKind, Location };
 use crate::ast::Node;
 
+use TokenKind::*;
+
 #[derive(Debug)]
 pub enum ParseError {
     UnexpectedToken,
@@ -78,7 +80,7 @@ impl Parser {
         self.tokens[self.current].clone()    
     }
 
-    fn peek_also_nl(&self) -> Token {
+    fn peek_with_nl(&self) -> Token {
         self.tokens[self.current].clone()    
     }
 
@@ -103,119 +105,84 @@ impl Parser {
         }
     }
     
+    fn expression_list(&mut self, stop: TokenKind) -> Result<Vec<Node>, ParseError> {
+        let mut exps: Vec<Node> = vec![];
+        if !self.expect(stop) {
+            exps.push(self.expression()?);
+            while !self.expect(stop) {
+                self.consume(TokenKind::COMMA)?;
+                exps.push(self.expression()?)
+            }
+        }
+        Ok(exps)
+    }
+
     fn product(&mut self) -> Result<Node, ParseError> {
-        let t= self.peek();
-        let mut node: Node;
-        match t.kind {
-            TokenKind::INTEGER     => {
-                self.consume(TokenKind::INTEGER)?;
-                node = Node::Integer(t.text.parse::<i32>().unwrap());
-            }
-            TokenKind::FLOAT       => { 
-                self.consume(TokenKind::FLOAT)?;
-                node = Node::Float(t.text.parse::<f32>().unwrap()); 
-            }
-            TokenKind::STRING      => { 
-                self.consume(TokenKind::STRING)?;
-                node = Node::String(t.text.to_string());
-            }
-            TokenKind::IDENTIFIER  => { 
-                self.consume(TokenKind::IDENTIFIER)?;
-                node = Node::Identifier(t.text);
-            }
-            TokenKind::LPAREN  => {
-                self.consume(TokenKind::LPAREN)?;
+        let t= self.next();
+        let mut node = match t.kind {
+            INTEGER    => Node::Integer(t.text.parse::<i32>().unwrap()),
+            FLOAT      => Node::Float(t.text.parse::<f32>().unwrap()), 
+            STRING     => Node::String(t.text.to_string()),
+            IDENTIFIER => Node::Identifier(t.text),
+            TRUE       => Node::True,
+            FALSE      => Node::False,
+            NOTHING    => Node::Nothing,
+            LSQUARE    => Node::List(self.expression_list(RSQUARE)?),
+            LPAREN     => {
                 let expr = self.expression()?;
-                self.consume(TokenKind::RPAREN)?;
-                node = Node::Group(Box::new(expr));
+                self.consume(RPAREN)?;
+                Node::Group(Box::new(expr))
             },
-            TokenKind::PLUS | TokenKind::MINUS | TokenKind::BANG => {
-                self.consume(t.kind)?;
+            PLUS | MINUS | BANG => {
                 let operand = self.product()?;
-                node = Node::Unary {
+                Node::Unary {
                     op: t.text,
                     operand: Box::new(operand)
-                };
-            },
-            TokenKind::TRUE => { 
-                self.consume(TokenKind::TRUE)?;
-                node = Node::True;
-            }
-            TokenKind::FALSE => { 
-                self.consume(TokenKind::FALSE)?;
-                node = Node::False;
-            }
-            TokenKind::NOTHING => { 
-                self.consume(TokenKind::NOTHING)?;
-                node = Node::Nothing;
-            }
-            TokenKind::LSQUARE => {
-                self.consume(TokenKind::LSQUARE)?;
-                let mut elements: Vec<Node> = vec![];
-                if !self.expect(TokenKind::RSQUARE) {
-                    elements.push(self.expression()?);
-                    while !self.expect(TokenKind::RSQUARE) {
-                        self.consume(TokenKind::COMMA)?;
-                        elements.push(self.expression()?)
-                    }
                 }
-                node = Node::List(elements);
-            }            
+            },
             _ => {
                 dbg!(t);
                 return Err(ParseError::IllDefinedAST);
             }
-        }
+        };
         
+        // may written better
         loop {
-            
-            let ntnl = self.peek_also_nl();
+            let ntnl = self.peek_with_nl();
             match ntnl.kind {
-                TokenKind::LSQUARE => {
-                    self.consume(TokenKind::LSQUARE)?;
+                LSQUARE => {
+                    self.consume(LSQUARE)?;
                     let rhs = self.expression()?;
-                    self.consume(TokenKind::RSQUARE)?;
-    
+                    self.consume(RSQUARE)?;
                     node = Node::Binary { 
                         op: ntnl.text, 
                         lhs: Box::new(node),
                         rhs: Box::new(rhs), 
-                    };
-                    continue;
+                    }; continue;
                 },
-                TokenKind::LPAREN => {
-                    self.consume(TokenKind::LPAREN)?;
-                    let mut args: Vec<Node> = vec![];
-                    if !self.expect(TokenKind::RPAREN) {
-                        args.push(self.expression()?);
-                        while !self.expect(TokenKind::RPAREN) {
-                            self.consume(TokenKind::COMMA)?;
-                            args.push(self.expression()?)
-                        }
-                    }
-    
+                LPAREN => {
+                    self.consume(LPAREN)?;
+                    let args = self.expression_list(RPAREN)?;
                     node = Node::FunCall { 
                         fun: Box::new(node), 
-                        args: args
-                    };
-                    continue;
+                        args
+                    }; continue;
                 },
                 _ => {}
             }     
             let nt = self.peek();
             match nt.kind {
-                TokenKind::DOT => {
-                    self.consume(TokenKind::DOT)?;
+                DOT => {
+                    self.consume(DOT)?;
                     let rhs = Node::Identifier(
-                        self.consume(TokenKind::IDENTIFIER)?.text
+                        self.consume(IDENTIFIER)?.text
                     );
 
                     node = Node::Binary { 
                         op: nt.text, 
                         lhs: Box::new(node),
                         rhs: Box::new(rhs), 
-                    };
-                    continue;
+                    }; continue;
                 },
                 _ => break
             }
@@ -225,161 +192,120 @@ impl Parser {
 
     fn term(&mut self) -> Result<Node, ParseError> {
         let mut lhs = self.product()?;
-        match self.peek().kind {
-            TokenKind::STAR | TokenKind::SLASH | TokenKind::PERCENT => {
-                while self.peek().kind == TokenKind::STAR  || 
-                      self.peek().kind == TokenKind::SLASH ||
-                      self.peek().kind == TokenKind::PERCENT {
-                        let op = self.peek().text; 
-                        let t = self.peek().clone();
-                        self.consume(t.kind)?;
-                        let rhs = self.product()?;
-                        lhs = Node::Binary {
-                            op: op,
-                            lhs: Box::new(lhs),
-                            rhs: Box::new(rhs)
-                        };
-                }
-                Ok(lhs)
-            },         
-            _ => Ok(lhs)
-        }
+        while let STAR | SLASH | PERCENT = self.peek().kind {
+            let t = self.peek().clone();
+            self.consume(t.kind)?;
+            let rhs = self.product()?;
+            lhs = Node::Binary {
+                op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
+            };
+        } 
+        Ok(lhs)
     }
 
     pub fn arithmetic(&mut self) -> Result<Node, ParseError> {
         let mut lhs = self.term()?;
-        match self.peek().kind {
-            TokenKind::PLUS | TokenKind::MINUS | TokenKind::PIPE => {
-                while self.peek().kind == TokenKind::MINUS || 
-                      self.peek().kind == TokenKind::PLUS  || 
-                      self.peek().kind == TokenKind::PIPE {
-                        let op = self.peek().text; 
-                        let t = self.peek().clone();
-                        self.consume(t.kind)?;
-                        let rhs = self.term()?;
-                        lhs = Node::Binary {
-                            op: op,
-                            lhs: Box::new(lhs),
-                            rhs: Box::new(rhs)
-                        };
-                }
-                Ok(lhs)
-            },         
-            _ => Ok(lhs)
+        while let PLUS | MINUS | PIPE = self.peek().kind {
+            let t = self.peek().clone();
+            self.consume(t.kind)?;
+            let rhs = self.term()?;
+            lhs = Node::Binary {
+                op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
+            };
         }
+        Ok(lhs)
     }
 
     fn relation(&mut self) -> Result<Node, ParseError> {
         let lhs = self.arithmetic()?;
-        match self.peek().kind {
-            TokenKind::DEQUAL       |
-            TokenKind::BANGEQUAL    |
-            TokenKind::GREATER      |
-            TokenKind::GREATEREQUAL |
-            TokenKind::LESS         |
-            TokenKind::LESSEQUAL    => {
-                let op = self.peek().text;
-                let t = self.peek().clone();
-                self.consume(t.kind)?;
-                let rhs = self.arithmetic()?;
-                Ok(Node::Binary { 
-                    op: op, 
-                    rhs: Box::new(rhs), 
-                    lhs: Box::new(lhs) 
-                })
-            },
-            _ => Ok(lhs)
-        }
+        if let DEQUAL | BANGEQUAL | GREATER | GREATEREQUAL | LESS | LESSEQUAL = self.peek().kind {
+            let t = self.peek().clone();
+            self.consume(t.kind)?;
+            let rhs = self.arithmetic()?;
+            Ok(Node::Binary { 
+                op: t.text, rhs: Box::new(rhs), lhs: Box::new(lhs) 
+            })
+        } else { Ok(lhs) }
     }
 
     pub fn logic(&mut self) -> Result<Node, ParseError> {
         let mut lhs = self.relation()?;
-        match self.peek().kind {
-            TokenKind::DVLINE | TokenKind::DAMPERSAND => {
-                while self.peek().kind == TokenKind::DVLINE || 
-                      self.peek().kind == TokenKind::DAMPERSAND {
-                        let op = self.peek().text; 
-                        let t = self.peek().clone();
-                        self.consume(t.kind)?;
-                        let rhs = self.relation()?;
-                        lhs = Node::Binary {
-                            op: op,
-                            lhs: Box::new(lhs),
-                            rhs: Box::new(rhs)
-                        };
-                }
-                Ok(lhs)
-            },         
-            _ => Ok(lhs)
+        while let DVLINE | DAMPERSAND = self.peek().kind {
+            let t = self.peek().clone();
+            self.consume(t.kind)?;
+            let rhs = self.relation()?;
+            lhs = Node::Binary {
+                op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
+            };
         }
+        Ok(lhs)
     }
 
     pub fn expression(&mut self) -> Result<Node, ParseError> {
         let lhs = self.logic()?;
-        match self.peek().kind {
-            TokenKind::EQUAL => {
-                self.consume(TokenKind::EQUAL)?;
-                let rhs = self.expression()?;
-                Ok(Node::Binary { op: String::from("="), lhs: Box::new(lhs), rhs: Box::new(rhs) })
-            }
-
-            _ => Ok(lhs)
-        }
+        if let EQUAL = self.peek().kind {
+            let t = self.peek().clone();
+            self.consume(t.kind)?;
+            let rhs = self.expression()?;
+            Ok(Node::Binary { op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs) })
+        } else { Ok(lhs) }
     }
 
     fn while_statement(&mut self) -> Result<Node, ParseError> {
-        self.consume(TokenKind::WHILE)?;
+        self.consume(WHILE)?;
         Ok(Node::While { expr: Box::new(self.expression()?), body: Box::new(self.block()?) })
     }
 
     fn if_statement(&mut self) -> Result<Node, ParseError> {
-        self.consume(TokenKind::IF)?;
+        self.consume(IF)?;
         Ok(Node::If { 
             expr: Box::new(self.expression()?), 
             body: Box::new(self.block()?), 
-            els: if self.peek().kind == TokenKind::ELSE { Box::new(self.els()?) } else { Box::new(Node::None) } 
+            els: if self.peek().kind == ELSE { Box::new(self.els()?) } else { Box::new(Node::None) } 
         })
     }
 
     fn els(&mut self) -> Result<Node, ParseError> {
-        self.consume(TokenKind::ELSE)?;
-        if self.peek().kind == TokenKind::LCURLY {
+        self.consume(ELSE)?;
+        if self.peek().kind == LCURLY {
             Ok(Node::Else { expr: Box::new(Node::None), body: Box::new(self.block()?), els: Box::new(Node::None) })
         } else {
             Ok(Node::Else { 
                 expr: Box::new(self.expression()?), 
                 body: Box::new(self.block()?), 
-                els: if self.peek().kind == TokenKind::ELSE { Box::new(self.els()?) } else { Box::new(Node::None) } 
+                els: if self.peek().kind == ELSE { Box::new(self.els()?) } else { Box::new(Node::None) } 
             })
         }
     }
 
+    // todo
     fn fun_declaration(&mut self) -> Result<Node, ParseError> {
-        self.consume(TokenKind::FUN)?;
-        let name = self.consume(TokenKind::IDENTIFIER)?.text;
-        self.consume(TokenKind::LPAREN)?;
-        let mut args: Vec<String> = vec![];
-        if !self.expect(TokenKind::RPAREN) {
-            args.push(self.consume(TokenKind::IDENTIFIER)?.text);
-            while !self.expect(TokenKind::RPAREN) {
-                self.consume(TokenKind::COMMA)?;
-                args.push(self.consume(TokenKind::IDENTIFIER)?.text);
+        self.consume(FUN)?;
+        let name = self.consume(IDENTIFIER)?.text;
+        self.consume(LPAREN)?;
+        let mut args = vec![];
+        if !self.expect(RPAREN) {
+            args.push(self.consume(IDENTIFIER)?.text);
+            while !self.expect(RPAREN) {
+                self.consume(COMMA)?;
+                args.push(self.consume(IDENTIFIER)?.text);
             }
         }
         let body = Box::new(self.fun_block()?);
         Ok(Node::Fun { name, args, body })
     }
-
+    
+    // todo
     fn class_declaration(&mut self) -> Result<Node, ParseError> {
-        self.consume(TokenKind::CLASS)?;
-        let name = self.consume(TokenKind::IDENTIFIER)?.text;
-        self.consume(TokenKind::LCURLY)?;
-        let mut members: Vec<String> = vec![];
-        let mut methods: Vec<Node> = vec![];
-        while !self.expect(TokenKind::RCURLY) {
+        self.consume(CLASS)?;
+        let name = self.consume(IDENTIFIER)?.text;
+        self.consume(LCURLY)?;
+        let mut members = vec![];
+        let mut methods = vec![];
+        while !self.expect(RCURLY) {
             match self.peek().kind {
-                TokenKind::FUN => methods.push(self.fun_declaration()?),
-                TokenKind::IDENTIFIER => members.push(self.consume(TokenKind::IDENTIFIER)?.text),
+                FUN => methods.push(self.fun_declaration()?),
+                IDENTIFIER => members.push(self.consume(IDENTIFIER)?.text),
                 _ => println!("error")
             }
         }
@@ -390,27 +316,27 @@ impl Parser {
         if self.inside_function == 0 {
             return Err(ParseError::ReturnOutsideFunction);
         }
-        self.consume(TokenKind::RETURN)?;
+        self.consume(RETURN)?;
         Ok(Node::Return(Box::new(self.expression()?)))
     }
 
     fn let_statement(&mut self) -> Result<Node, ParseError> {
-        self.consume(TokenKind::LET)?;
-        let name = self.consume(TokenKind::IDENTIFIER)?.text;
-        self.consume(TokenKind::EQUAL)?;
+        self.consume(LET)?;
+        let name = self.consume(IDENTIFIER)?.text;
+        self.consume(EQUAL)?;
         let expr = Box::new(self.expression()?);
         Ok(Node::Let { name, expr })  
     }
 
     fn import_statement(&mut self) -> Result<Node, ParseError> {
-        self.consume(TokenKind::IMPORT)?;
-        Ok(Node::Import(self.consume(TokenKind::STRING)?.text))
+        self.consume(IMPORT)?;
+        Ok(Node::Import(self.consume(STRING)?.text))
     }
 
     fn block(&mut self) -> Result<Node, ParseError> {
-        self.consume(TokenKind::LCURLY)?;
+        self.consume(LCURLY)?;
         let mut statements: Vec<Node> = vec![];
-        while !self.expect(TokenKind::RCURLY) {
+        while !self.expect(RCURLY) {
             statements.push(self.statement()?);
         }
         Ok(Node::Block(statements))
@@ -418,9 +344,9 @@ impl Parser {
 
     fn fun_block(&mut self) -> Result<Node, ParseError> {
         self.inside_function += 1;
-        self.consume(TokenKind::LCURLY)?;
+        self.consume(LCURLY)?;
         let mut statements: Vec<Node> = vec![];
-        while !self.expect(TokenKind::RCURLY) {
+        while !self.expect(RCURLY) {
             statements.push(self.statement()?);
         }
         self.inside_function -= 1;
@@ -429,23 +355,24 @@ impl Parser {
 
     fn statement(&mut self) -> Result<Node, ParseError> {
         let node = match self.peek().kind {
-            TokenKind::LCURLY => self.block()?,
-            TokenKind::LET    => self.let_statement()?,
-            TokenKind::RETURN => self.return_statement()?,
-            TokenKind::CLASS  => self.class_declaration()?,
-            TokenKind::FUN    => self.fun_declaration()?,
-            TokenKind::IF     => self.if_statement()?,
-            TokenKind::WHILE  => self.while_statement()?,
-            TokenKind::IMPORT => self.import_statement()?,
-            _                 => self.expression()?,
+            LCURLY => self.block()?,
+            LET    => self.let_statement()?,
+            RETURN => self.return_statement()?,
+            CLASS  => self.class_declaration()?,
+            FUN    => self.fun_declaration()?,
+            IF     => self.if_statement()?,
+            WHILE  => self.while_statement()?,
+            IMPORT => self.import_statement()?,
+            _      => self.expression()?,
         };
-        self.expect(TokenKind::SEMICOLON);
+        // Optional semi-colon
+        self.expect(SEMICOLON);
         Ok(node)
     }
 
     fn program(&mut self) -> Result<Node, ParseError> {
-        let mut statements: Vec<Node>= vec![];
-        while !self.expect(TokenKind::END) {
+        let mut statements = vec![];
+        while !self.expect(END) {
             statements.push(self.statement()?);
         }
         Ok(Node::Program(statements))
