@@ -42,26 +42,18 @@ impl Scope {
                 *value = val.clone(); Ok(())
             }
             None => match &mut self.upper {
-                Some(scope) => {
-                    scope.assign(var, val)
-                },
+                Some(scope) => scope.assign(var, val),
                 None => Err(RuntimeError::UndefinedVariable)
             }
         }
     }
 
-    fn resolve_value(&self, var: &String) -> Option<Value> {
+    fn resolve(&self, var: &String) -> Option<Value> {
         match self.env.get(var) {
-            Some(value) => {
-                Some(value.clone()) 
-            },
-            None => {
-                match &self.upper {
-                    Some(upper) => {
-                        upper.resolve_value(var)
-                    },
-                    None => None
-                }
+            Some(value) => Some(value.clone()), 
+            None => match &self.upper {
+                Some(upper) => upper.resolve(var),
+                None => None
             }
         }
     }
@@ -85,18 +77,20 @@ pub struct Function {
 
 impl Function {
     pub fn call(&self, func_id: u64, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, RuntimeError> {
+        if self.args.len() != args.len() {
+            return Err(RuntimeError::ArgNumMismatch);
+        }
         interpreter.enter_scope();
-        // recursiveness 
+        // -- HACK for prevent from shadowing => Capture only needed variables
+        if let Some(scope) = &self.closure {
+            interpreter.current_scope.env.extend(scope.clone());    
+        }
+        // --
+        // self-reference 
         interpreter.current_scope.env.insert(
             self.name.clone(), 
             Value::Function(func_id)
         );
-        if self.args.len() != args.len() {
-            return Err(RuntimeError::ArgNumMismatch);
-        }
-        for (name, val) in self.closure.clone().unwrap() {
-            interpreter.current_scope.env.insert(name, val);
-        }
         for i in 0..self.args.len() {
             interpreter.current_scope.env.insert(
                 self.args[i].clone(), args[i].clone()
@@ -125,8 +119,7 @@ impl NativeFunction {
         if self.arity != args.len() {
             return Err(RuntimeError::ArgNumMismatch);
         }
-        let ret = (self.body)(interpreter, args);
-        ret
+        (self.body)(interpreter, args)
     } 
 }
 
@@ -304,12 +297,14 @@ impl Interpreter {
                         exit(0)
                     }
                 };
-                self.eval(node)?;
+                let cs = self.current_scope.clone();
+                self.current_scope = Scope::new();
+                    self.eval(node)?;
                 
                 let id = self.mod_id;
                 self.modules.insert(id, self.current_scope.clone());
                 self.mod_id += 1;
-                self.current_scope = Scope::new();
+                self.current_scope = cs;
                 self.current_scope.env.insert(
                     path
                     .split("/").collect::<Vec<_>>().last().unwrap().to_string()    
@@ -332,15 +327,9 @@ impl Interpreter {
             Node::Class { name, members, methods } => {
                 let mut values: HashMap<String, Function> = HashMap::new();
                 for method in methods {
-                    match method {
-                        Node::Fun { name, args, body } => {
-                            values.insert(
-                                name.clone(),
-                                Function { name, args, body: *body, closure: None }
-                            );
-                        }
-                        _ => { }
-                    }
+                    if let Node::Fun {name, args, body} = method {
+                        values.insert(name.clone(), Function { name, args, body: *body, closure: None });
+                    } else { unreachable!() }
                 }
                 let id = self.class_id;
                 self.classes.insert(id, ClassDef { name: name.clone(), members, methods: values });
@@ -352,8 +341,10 @@ impl Interpreter {
                 Ok(Value::None)                
             },
             Node::Fun { name, args, body } => {
-                let closure = self.current_scope.env.clone();
-                self.add_function(Function { name, args, body: *body, closure: Some(closure) });
+                let closure = if let Some(_) = self.current_scope.upper {
+                    Some(self.current_scope.env.clone())
+                } else { None };
+                self.add_function(Function { name, args, body: *body, closure });
                 Ok(Value::None)
             },
             Node::If { expr, body, els } => {
@@ -470,6 +461,13 @@ impl Interpreter {
                             Err(RuntimeError::TypeMismatch)
                         }
                     }
+                    // {
+                    //     if lhs_value == rhs_value {
+                    //         Ok(Value::Bool(true))
+                    //     } else {
+                    //         Ok(Value::Bool(false))
+                    //     }
+                    // } 
                     "||" => match (lhs_value, rhs_value) {
                         (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a || b)),
                         _ => Err(RuntimeError::TypeMismatch)
@@ -537,7 +535,7 @@ impl Interpreter {
                         (Value::Module(id), Node::Identifier(member)) => {
                             let scope = self.modules.get(&id)
                                 .expect("Module couldn't find.");
-                            let res = scope.resolve_value(&member);
+                            let res = scope.resolve(&member);
                             if res.is_none() {
                                 Err(RuntimeError::MemberAccessError)
                             } else { Ok(res.unwrap()) }
@@ -569,8 +567,15 @@ impl Interpreter {
                     _ => unreachable!() 
                 }
             },
-            Node::Integer(i) => Ok(Value::Int(i)),
-            Node::Float(f) => Ok(Value::Float(f)),
+            Node::Integer(i)        => Ok(Value::Int(i)),
+            Node::Float(f)          => Ok(Value::Float(f)),
+            Node::String(s)      => Ok(Value::String(s)),
+            Node::True                   => Ok(Value::Bool(true)),
+            Node::False                  => Ok(Value::Bool(false)),
+            Node::Nothing                => Ok(Value::Nothing),
+            Node::None                   => Ok(Value::None),
+            
+            Node::Group(expr) => self.eval(*expr),
             Node::List(nodes) => {
                 let mut values: Vec<Value> = vec![];
                 for node in nodes {
@@ -582,9 +587,8 @@ impl Interpreter {
                 self.list_id += 1;
                 Ok(Value::List(id))
             },
-            Node::String(s) => Ok(Value::String(s)),
             Node::Identifier(s) => { 
-                match self.current_scope.resolve_value(&s){
+                match self.current_scope.resolve(&s){
                     Some(value) => Ok(value),
                     None => {
                         match self.globals.get(&s) {
@@ -594,7 +598,6 @@ impl Interpreter {
                     }
                 }
             },
-            Node::Group(expr) => self.eval(*expr),
             Node::Unary { op, operand } => {
                 let operand_val = self.eval(*operand)?;
                 match op.as_str() {
@@ -660,14 +663,12 @@ impl Interpreter {
                         let method = self.classes.get(&class_id).unwrap().methods.get(&method_name).unwrap().clone();                                        
                         self.enter_scope();
                         
-                        if method.args.len() - 1 != node_args.len() {
-                            return Err(RuntimeError::ArgNumMismatch);
-                        }
-                        
                         if method.args[0] != "this".to_string() {
                             return Err(RuntimeError::AbsendThisError);
                         }
-
+                        if method.args.len() - 1 != node_args.len() {
+                            return Err(RuntimeError::ArgNumMismatch);
+                        }
                         self.current_scope.env.insert("this".to_string(), ins_val);
 
                         for i in 1..method.args.len() {
@@ -687,10 +688,6 @@ impl Interpreter {
                     _ => Err(RuntimeError::TypeMismatch)
                 }
             },
-            Node::True => Ok(Value::Bool(true)),
-            Node::False => Ok(Value::Bool(false)),
-            Node::Nothing => Ok(Value::Nothing),
-            Node::None => Ok(Value::None)
         }
     }
     
