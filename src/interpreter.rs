@@ -31,6 +31,11 @@ pub struct Scope {
     upper: Option<Box<Scope>>
 }
 
+pub struct Module {
+    pub name: String,
+    pub scope: Scope
+}
+
 impl Scope {
     pub fn new() -> Scope {
         Scope { env: HashMap::new(), upper: None }
@@ -60,19 +65,18 @@ impl Scope {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
-struct ClassDef {
-    name: String,
-    members: Vec<String>,
-    methods: HashMap<String, Function>
+pub struct ClassDef {
+    pub name: String,
+    pub members: Vec<String>,
+    pub methods: HashMap<String, Function>
 }
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    name: String,
-    args: Vec<String>,
-    body: Node,
-    closure: Option<HashMap<String, Value>>
+    pub name: String,
+    pub args: Vec<String>,
+    pub body: Node,
+    pub closure: Option<HashMap<String, Value>>
 }
 
 impl Function {
@@ -105,9 +109,9 @@ impl Function {
 
 #[derive(Clone)]
 pub struct NativeFunction {
-    name: String,
-    arity: usize,
-    body: fn(&mut Interpreter, &[Value]) -> Result<Value, RuntimeError>,
+    pub name: String,
+    pub arity: usize,
+    pub body: fn(&mut Interpreter, &[Value]) -> Result<Value, RuntimeError>,
 }
 
 impl NativeFunction {
@@ -131,7 +135,7 @@ pub struct Interpreter {
     instances    : HashMap<u64, HashMap<String, Value>>,
     lists        : HashMap<u64, Vec<Value>>,
     classes      : HashMap<u64, ClassDef>,
-    modules      : HashMap<u64, Scope>,
+    modules      : HashMap<u64, Module>,
     functions    : HashMap<u64, Function>,
     nfunctions   : HashMap<u64, NativeFunction>,
 
@@ -201,6 +205,14 @@ impl Interpreter {
         self.nfunctions.get(id).expect("No Native Function with this id.")
     }
 
+    pub fn get_classdef(&self, id: &u64) -> &ClassDef {
+        self.classes.get(id).expect("No Class with this id.")
+    }
+
+    pub fn get_module(&self, id: &u64) -> &Module {
+        self.modules.get(id).expect("No module with this id.")
+    }
+
     pub fn add_native_function_to_module(&mut self, module_name: String, func: NativeFunction) {
         let module_val = self.eval(Node::Identifier(module_name))
             .expect("Expected Value");
@@ -210,7 +222,7 @@ impl Interpreter {
                 let id = self.nfunc_id;
                 self.nfunc_id += 1;
                 self.nfunctions.insert(id, func.clone());
-                module.env.insert(func.name.clone(), Value::NativeFunction(id));
+                module.scope.env.insert(func.name.clone(), Value::NativeFunction(id));
             } 
             _ => {}
         }
@@ -225,7 +237,7 @@ impl Interpreter {
 
     pub fn add_module(&mut self, global: bool, scope: Scope, name: String) {
         let id = self.mod_id;
-        self.modules.insert(id, scope.clone());
+        self.modules.insert(id, Module {name: name.clone(), scope: scope.clone()});
         self.mod_id += 1;
         // self.current_scope = Scope::new();
         if global {
@@ -242,6 +254,26 @@ impl Interpreter {
             function.name, 
             Value::Function(id)
         );
+    }
+
+    fn equality(&mut self, lhs_value: Value, rhs_value: Value) -> Result<Value, RuntimeError> {
+        match (lhs_value.clone(), rhs_value.clone()) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a == b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a == b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a == b as f32)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 == b)),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
+            (Value::List(ida), Value::List(idb)) => Ok(Value::Bool(self.get_list(&ida) == self.get_list(&idb))),
+            (Value::Function(ida), Value::Function(idb)) => Ok(Value::Bool(ida == idb)),
+            (Value::Instance(_, ida), Value::Instance(_, idb)) => Ok(Value::Bool(ida == idb)),
+            _ => {
+                if std::mem::discriminant(&lhs_value) != 
+                    std::mem::discriminant(&rhs_value) {
+                        return Ok(Value::Bool(false));
+                    }
+                Err(RuntimeError::TypeMismatch)
+            }
+        }
     }
 
     pub fn eval(&mut self, node: Node) -> Result<Value, RuntimeError> {
@@ -301,14 +333,15 @@ impl Interpreter {
                 self.current_scope = Scope::new();
                     self.eval(node)?;
                 
+                let name = path
+                    .split("/").collect::<Vec<_>>().last().unwrap().to_string()    
+                    .split(".").collect::<Vec<_>>()[0].to_string();
                 let id = self.mod_id;
-                self.modules.insert(id, self.current_scope.clone());
+                self.modules.insert(id, Module { name: name.clone(), scope: self.current_scope.clone()});
                 self.mod_id += 1;
                 self.current_scope = cs;
                 self.current_scope.env.insert(
-                    path
-                    .split("/").collect::<Vec<_>>().last().unwrap().to_string()    
-                    .split(".").collect::<Vec<_>>()[0].to_string(), 
+                    name, 
                     Value::Module(id)
                 );
                 Ok(Value::None)
@@ -404,17 +437,28 @@ impl Interpreter {
                 if op.as_str() != "." {
                     rhs_value = self.eval(*rhs.clone())?;
                 }
+                // Refactor, hopefully
                 match op.as_str() {
                     "+" => match (lhs_value, rhs_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
+                        (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + b as f32)),
+                        (Value::Int(a), Value::Float(b)) => Ok(Value::Float(a as f32 + b)),
+                        (Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     } 
                     "-" => match (lhs_value, rhs_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
+                        (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a - b as f32)),
+                        (Value::Int(a), Value::Float(b)) => Ok(Value::Float(a as f32 - b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     }
                     "*" => match (lhs_value, rhs_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
+                        (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a * b as f32)),
+                        (Value::Int(a), Value::Float(b)) => Ok(Value::Float(a as f32 * b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     }
                     "/" => match (lhs_value, rhs_value) {
@@ -430,37 +474,36 @@ impl Interpreter {
                     }
                     "<=" => match (lhs_value, rhs_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a <= b)),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a <= b)),
+                        (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a <= b as f32)),
+                        (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 <= b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
                     ">=" => match (lhs_value, rhs_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a >= b)),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a >= b)),
+                        (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a >= b as f32)),
+                        (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 >= b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
                     "<" => match (lhs_value, rhs_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a < b)),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a < b)),
+                        (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a < b as f32)),
+                        (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((a as f32) < b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
                     ">" => match (lhs_value, rhs_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a > b)),
-                        _ => Err(RuntimeError::TypeMismatch)
-                    }
-                    "!=" => match (lhs_value, rhs_value) {
-                        (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a != b)),
-                        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a != b)),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a > b)),
+                        (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a > b as f32)),
+                        (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 > b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
-                    "==" => match (lhs_value.clone(), rhs_value.clone()) {
-                        (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a == b)),
-                        (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a == b)),
-                        (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
-                        _ => {
-                            if std::mem::discriminant(&lhs_value) != 
-                                std::mem::discriminant(&rhs_value) {
-                                    return Ok(Value::Bool(false));
-                                }
-                            Err(RuntimeError::TypeMismatch)
-                        }
-                    }
+                    "!=" => if let Value::Bool(b) = self.equality(lhs_value, rhs_value)? {
+                                return Ok(Value::Bool(!b));
+                            } else { unreachable!() }
+                    "==" => self.equality(lhs_value, rhs_value),
                     // {
                     //     if lhs_value == rhs_value {
                     //         Ok(Value::Bool(true))
@@ -499,7 +542,7 @@ impl Interpreter {
                                     (Value::Module(id), Node::Identifier(member)) => {
                                         let module = self.modules.get_mut(&id)
                                             .expect("Module couldn't find.");
-                                        module.assign(&member, &rhs_value)?;
+                                        module.scope.assign(&member, &rhs_value)?;
                                         Ok(rhs_value)
                                     },
                                     _ => Err(RuntimeError::MemberAccessError)
@@ -533,9 +576,9 @@ impl Interpreter {
                             }
                         }
                         (Value::Module(id), Node::Identifier(member)) => {
-                            let scope = self.modules.get(&id)
+                            let module = self.modules.get(&id)
                                 .expect("Module couldn't find.");
-                            let res = scope.resolve(&member);
+                            let res = module.scope.resolve(&member);
                             if res.is_none() {
                                 Err(RuntimeError::MemberAccessError)
                             } else { Ok(res.unwrap()) }

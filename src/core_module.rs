@@ -6,8 +6,10 @@ pub fn init(interpreter: &mut Interpreter) {
     interpreter.add_native_function(NativeFunction::new( 
         String::from("print"), 
         1,
-        |_, args| {
-            println!("{:?}", args[0]); Ok(Value::None)
+        |interpreter, args| {
+            for arg in args {
+                arg.print(interpreter); println!();
+            }; Ok(Value::None)
         } 
     ));
 

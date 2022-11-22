@@ -1,3 +1,5 @@
+use crate::interpreter::{Interpreter};
+
 
 #[derive(PartialEq)]
 #[allow(dead_code)]
@@ -53,6 +55,36 @@ impl Value {
                 cid, name)   => Type::Method(*cid, name.clone()),
             Value::Nothing                  => Type::Unit,
             Value::None                     => Type::Void
+        }
+    }
+    
+    pub fn print(&self, interpreter: &mut Interpreter) {
+        match self {
+            Value::Int(i) => print!("{}", i),
+            Value::Float(f) => print!("{}", f),
+            Value::String(s) => print!("{}", s),
+            Value::Bool(b) => print!("{}", b),
+            Value::Nothing => print!("nothing"),
+            Value::None => print!("none"),
+            Value::List(id) => {
+                print!("[");
+                let mut first = true;
+                for i in interpreter.get_list(id).clone() {
+                    if !first { print!(", "); } else { first = false }  
+                    i.print(interpreter);
+                }
+                print!("]")
+            },
+            Value::Function(id) => print!("function: {}", interpreter.get_function(id).name),
+            Value::NativeFunction(id) => print!("native: {}", interpreter.get_nfunction(id).name),
+            Value::ClassD(id) => print!("class: {}", interpreter.get_classdef(id).name),
+            Value::Module(id) => print!("module: {}", interpreter.get_module(id).name),
+            Value::Instance(cid, _) => {
+                print!("instance of class {}", interpreter.get_classdef(cid).name)
+            }            
+            Value::Method(_, cid, name) => {
+                print!("method '{}' of {}", name, interpreter.get_classdef(cid).name);
+            }
         }
     }
 }
