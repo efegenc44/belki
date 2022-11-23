@@ -8,8 +8,16 @@ pub fn init(interpreter: &mut Interpreter) {
         1,
         |interpreter, args| {
             for arg in args {
-                arg.print(interpreter); println!();
+                println!("{}", arg.get_string(interpreter));
             }; Ok(Value::None)
+        } 
+    ));
+
+    interpreter.add_native_function(NativeFunction::new( 
+        String::from("type"), 
+        1,
+        |interpreter, args| {
+            Ok(Value::String(args[0].get_type().get_string(interpreter)))
         } 
     ));
 

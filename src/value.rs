@@ -2,7 +2,6 @@ use crate::interpreter::{Interpreter};
 
 
 #[derive(PartialEq)]
-#[allow(dead_code)]
 pub enum Type {
     Int,
     Float,
@@ -17,6 +16,26 @@ pub enum Type {
 
     Unit,
     Void
+}
+
+impl Type {
+    pub fn get_string(self, interpreter: &mut Interpreter) -> String {
+        match self {
+            Type::Int => "Integer".to_string(),
+            Type::Float => "Float".to_string(),
+            Type::Bool => "Bool".to_string(),
+            Type::String => "String".to_string(),
+            Type::List => "List".to_string(),
+            Type::Function => "Function".to_string(),
+            Type::Module => "Module".to_string(),
+            Type::Custom(cid) => interpreter.get_classdef(&cid).name.clone(),
+            Type::ClassDef(_) => "Type".to_string(),
+            Type::Method(cid, _) => format!("Method of {}", interpreter.get_classdef(&cid).name.clone()),
+            
+            Type::Unit => "Unit".to_string(),
+            Type::Void => "Void".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,8 +57,7 @@ pub enum Value {
 }
 
 impl Value {
-    #[allow(dead_code)]
-    fn get_type(&self) -> Type {
+    pub fn get_type(&self) -> Type {
         match self {
             Value::Int(_)                   => Type::Int,
             Value::Float(_)                 => Type::Float,
@@ -58,32 +76,36 @@ impl Value {
         }
     }
     
-    pub fn print(&self, interpreter: &mut Interpreter) {
+    pub fn get_string(&self, interpreter: &mut Interpreter) -> String {
         match self {
-            Value::Int(i) => print!("{}", i),
-            Value::Float(f) => print!("{}", f),
-            Value::String(s) => print!("{}", s),
-            Value::Bool(b) => print!("{}", b),
-            Value::Nothing => print!("nothing"),
-            Value::None => print!("none"),
+            Value::Int(i) => i.to_string(),
+            Value::Float(f) => f.to_string(),
+            Value::String(s) => format!("'{}'", s.clone()),
+            Value::Bool(b) => if *b { "true".to_string() } else { "false".to_string() },
+            Value::Nothing => "nothing".to_string(),
+            Value::None => "none".to_string(), // ?
             Value::List(id) => {
-                print!("[");
+                let mut s = String::from("[");
                 let mut first = true;
                 for i in interpreter.get_list(id).clone() {
-                    if !first { print!(", "); } else { first = false }  
-                    i.print(interpreter);
-                }
-                print!("]")
+                    if !first { s += ", "; } else { first = false }  
+                    s += &i.get_string(interpreter);
+                } s += "]"; s
             },
-            Value::Function(id) => print!("function: {}", interpreter.get_function(id).name),
-            Value::NativeFunction(id) => print!("native: {}", interpreter.get_nfunction(id).name),
-            Value::ClassD(id) => print!("class: {}", interpreter.get_classdef(id).name),
-            Value::Module(id) => print!("module: {}", interpreter.get_module(id).name),
-            Value::Instance(cid, _) => {
-                print!("instance of class {}", interpreter.get_classdef(cid).name)
+            Value::Function(id) => format!("<function: {}>", interpreter.get_function(id).name),
+            Value::NativeFunction(id) => format!("<native: {}>", interpreter.get_nfunction(id).name),
+            Value::ClassD(id) => format!("<class: {}>", interpreter.get_classdef(id).name),
+            Value::Module(id) => format!("<module: {}>", interpreter.get_module(id).name),
+            Value::Instance(_, id) => {
+                let mut s = String::from("{");
+                let mut first = true;
+                for (key ,value) in interpreter.get_instance(id).clone() {
+                    if !first { s += ", " } else { first = false; }
+                    s += &format!("{}: {}", key, value.get_string(interpreter));
+                } s += "}"; s
             }            
             Value::Method(_, cid, name) => {
-                print!("method '{}' of {}", name, interpreter.get_classdef(cid).name);
+                format!("<method '{}' of {}>", name, interpreter.get_classdef(cid).name)
             }
         }
     }

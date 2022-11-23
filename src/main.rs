@@ -17,6 +17,7 @@ mod test;
 fn repl() {
     let mut interpreter = interpreter::Interpreter::new();
     interpreter.init();
+    interpreter.repl_mode();
     loop {
         let mut line = String::new();
         print!("> "); 

@@ -17,7 +17,7 @@ pub enum RuntimeError {
     ArgNumMismatch,
     AssignmentError,
     MemberAccessError,
-    ElementAccessError,
+    IndexOutOfRange,
     UndefinedVariable,
     AbsendThisError,
     AlreadyDefinedVarible,
@@ -132,6 +132,8 @@ pub struct Interpreter {
     return_val   : Value,
     globals      : HashMap<String, Value>,
     
+    repl         : bool,
+
     instances    : HashMap<u64, HashMap<String, Value>>,
     lists        : HashMap<u64, Vec<Value>>,
     classes      : HashMap<u64, ClassDef>,
@@ -154,6 +156,8 @@ impl Interpreter {
             globals      : HashMap::new(),
             return_val   : Value::None,
             
+            repl: false,
+
             instances : HashMap::new(),
             lists     : HashMap::new(),
             classes   : HashMap::new(),
@@ -170,6 +174,10 @@ impl Interpreter {
         }
     }
     
+    pub fn repl_mode(&mut self) {
+        self.repl = true;
+    }
+
     pub fn init(&mut self) {
         core_module::init(self);
         // math_module::init(self);
@@ -211,6 +219,10 @@ impl Interpreter {
 
     pub fn get_module(&self, id: &u64) -> &Module {
         self.modules.get(id).expect("No module with this id.")
+    }
+
+    pub fn get_instance(&self, id: &u64) -> &HashMap<String, Value> {
+        self.instances.get(id).expect("No Instance with this id.")
     }
 
     pub fn add_native_function_to_module(&mut self, module_name: String, func: NativeFunction) {
@@ -264,8 +276,6 @@ impl Interpreter {
             (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 == b)),
             (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
             (Value::List(ida), Value::List(idb)) => Ok(Value::Bool(self.get_list(&ida) == self.get_list(&idb))),
-            (Value::Function(ida), Value::Function(idb)) => Ok(Value::Bool(ida == idb)),
-            (Value::Instance(_, ida), Value::Instance(_, idb)) => Ok(Value::Bool(ida == idb)),
             _ => {
                 if std::mem::discriminant(&lhs_value) != 
                     std::mem::discriminant(&rhs_value) {
@@ -280,7 +290,10 @@ impl Interpreter {
         match node {
             Node::Program(statements) => {
                 for statement in statements {
-                    self.eval(statement)?;
+                    let val = self.eval(statement)?;
+                    if self.repl && val != Value::None {
+                        println!("{}", val.get_string(self));
+                    }
                 } Ok(Value::None)
             },
             Node::Block(statements) => {
@@ -336,6 +349,7 @@ impl Interpreter {
                 let name = path
                     .split("/").collect::<Vec<_>>().last().unwrap().to_string()    
                     .split(".").collect::<Vec<_>>()[0].to_string();
+                
                 let id = self.mod_id;
                 self.modules.insert(id, Module { name: name.clone(), scope: self.current_scope.clone()});
                 self.mod_id += 1;
@@ -358,6 +372,9 @@ impl Interpreter {
                 Ok(Value::None)
             },
             Node::Class { name, members, methods } => {
+                if self.current_scope.env.contains_key(&name) {
+                    return Err(RuntimeError::AlreadyDefinedVarible);
+                }
                 let mut values: HashMap<String, Function> = HashMap::new();
                 for method in methods {
                     if let Node::Fun {name, args, body} = method {
@@ -381,8 +398,7 @@ impl Interpreter {
                 Ok(Value::None)
             },
             Node::If { expr, body, els } => {
-                let val = self.eval(*expr)?;
-                match val {
+                match self.eval(*expr)? {
                     Value::Bool(t) => {
                         if t {
                             assert!(self.eval(*body).unwrap() == Value::None, "If didn't returned None");
@@ -402,8 +418,7 @@ impl Interpreter {
                         Ok(Value::None)
                     },
                     _ => {
-                        let val = self.eval(*expr)?;
-                        match val {
+                        match self.eval(*expr)? {
                             Value::Bool(t) => {
                                 if t {
                                     assert!(self.eval(*body).unwrap() == Value::None, "Else didn't returned None");
@@ -419,8 +434,7 @@ impl Interpreter {
             },
             Node::While { expr, body } => {
                 while self.return_val == Value::None {
-                    let val = self.eval(*expr.clone())?;
-                    match val {
+                    match self.eval(*expr.clone())? {
                         Value::Bool(t) => {
                             if t {
                                 assert!(self.eval(*body.clone()).unwrap() == Value::None, "While didn't returned None");
@@ -464,6 +478,18 @@ impl Interpreter {
                     "/" => match (lhs_value, rhs_value) {
                         (Value::Int(a), Value::Int(b)) => {
                             if b != 0 { Ok(Value::Int(a / b)) } 
+                            else { Err(RuntimeError::DivisionByZero) }
+                        },
+                        (Value::Float(a), Value::Float(b)) => {
+                            if b != 0.0 { Ok(Value::Float(a / b)) } 
+                            else { Err(RuntimeError::DivisionByZero) }
+                        },
+                        (Value::Float(a), Value::Int(b)) => {
+                            if b != 0 { Ok(Value::Float(a / b as f32)) } 
+                            else { Err(RuntimeError::DivisionByZero) }
+                        },
+                        (Value::Int(a), Value::Float(b)) => {
+                            if b != 0.0 { Ok(Value::Float(a as f32 / b)) } 
                             else { Err(RuntimeError::DivisionByZero) }
                         }
                         _ => Err(RuntimeError::TypeMismatch)
@@ -548,13 +574,14 @@ impl Interpreter {
                                     _ => Err(RuntimeError::MemberAccessError)
                                 }
                                 "[" => match (llhs_value, lrhs_value) {
-                                    (Value::List(index), Value::Int(i)) => {
-                                        let list = self.lists.get_mut(&index)
+                                    (Value::List(id), Value::Int(index)) => {
+                                        let list = self.lists.get_mut(&id)
                                             .expect("List couldn't find.");
-                                        let _ = std::mem::replace(&mut list[i as usize], rhs_value.clone());
+                                        if index as usize >= list.len() {return Err(RuntimeError::IndexOutOfRange);}
+                                        let _ = std::mem::replace(&mut list[index as usize], rhs_value.clone());
                                         Ok(rhs_value)
                                     }
-                                    _ => Err(RuntimeError::ElementAccessError)
+                                    _ => Err(RuntimeError::TypeMismatch)
                                 }
                                 _ => Err(RuntimeError::AssignmentError)
                             }
@@ -587,11 +614,13 @@ impl Interpreter {
                     }
                     "[" => match (lhs_value, rhs_value) {
                         (Value::List(id), Value::Int(index)) => {
+                            let list = self.get_list(&id);
+                            if index as usize >= list.len() {return Err(RuntimeError::IndexOutOfRange);}
                             Ok(self.get_list(&id)[index as usize].clone())
                         },
                         (Value::String(string), Value::Int(index)) => {
                             let res = string.chars().nth(index as usize);
-                            if res.is_none() { Err(RuntimeError::ElementAccessError) }
+                            if res.is_none() { Err(RuntimeError::IndexOutOfRange) }
                             else { Ok(Value::String(res.unwrap().to_string())) }
                         }
                         _ => Err(RuntimeError::TypeMismatch)
@@ -617,7 +646,6 @@ impl Interpreter {
             Node::False                  => Ok(Value::Bool(false)),
             Node::Nothing                => Ok(Value::Nothing),
             Node::None                   => Ok(Value::None),
-            
             Node::Group(expr) => self.eval(*expr),
             Node::List(nodes) => {
                 let mut values: Vec<Value> = vec![];
@@ -665,36 +693,28 @@ impl Interpreter {
                 match fun_val {
                     Value::NativeFunction(id) => {
                         let nfunction = self.nfunctions.get(&id).unwrap().clone();
-                        let values = node_args.iter().map(|arg| {
-                            self.eval(arg.clone())
-                                .expect("Value Expected")
-                        }).collect::<Vec<_>>(); 
-                        
+                        let mut values = vec![];
+                        for arg in node_args {
+                            values.push(self.eval(arg)?);
+                        }
                         nfunction.call(self, &values)
                     }
                     Value::Function(id) => {
                         let function = self.get_function(&id).clone(); 
-                        let values = node_args.iter().map(|arg| {
-                            self.eval(arg.clone())
-                                .expect("Value Expected")
-                        }).collect::<Vec<_>>();
-
+                        let mut values = vec![];
+                        for arg in node_args {
+                            values.push(self.eval(arg)?);
+                        }
                         function.call(id, self, &values)
                     }
                     Value::ClassD(class_id) => {
                         let class = self.classes.get(&class_id).unwrap().clone();
-                        let mut values: HashMap<String, Value> = HashMap::new();
-                        
                         if class.members.len() != node_args.len() {
                             return Err(RuntimeError::ArgNumMismatch);
                         }
-
+                        let mut values = HashMap::new();
                         for i in 0..class.members.len() {
-                            let arg_val = self.eval(node_args[i].clone())
-                                .expect("Value Expected");
-                            values.insert(
-                                class.members[i].clone(), arg_val.clone()
-                            );
+                            values.insert(class.members[i].clone(), self.eval(node_args[i].clone())?);
                         }
                         let id = self.ins_id;
                         self.instances.insert(id, values);
@@ -704,26 +724,22 @@ impl Interpreter {
                     Value::Method(ins_id, class_id, method_name) => {
                         let ins_val = Value::Instance(class_id, ins_id);
                         let method = self.classes.get(&class_id).unwrap().methods.get(&method_name).unwrap().clone();                                        
-                        self.enter_scope();
-                        
-                        if method.args[0] != "this".to_string() {
+                        if method.args.len() == 0 || method.args[0] != "this".to_string() {
                             return Err(RuntimeError::AbsendThisError);
                         }
                         if method.args.len() - 1 != node_args.len() {
                             return Err(RuntimeError::ArgNumMismatch);
                         }
+                        self.enter_scope();
                         self.current_scope.env.insert("this".to_string(), ins_val);
-
                         for i in 1..method.args.len() {
-                            let arg_val = self.eval(node_args[i-1].clone())
-                            .expect("Value Expected");
+                            let arg_val = self.eval(node_args[i-1].clone())?;
                             self.current_scope.env.insert(
                                 method.args[i].clone(), arg_val.clone()
                             );
                         }
                         
                         let ret = self.eval(method.body);
-                        
                         self.exit_scope();
                         self.return_val = Value::None;
                         ret

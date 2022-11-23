@@ -306,7 +306,7 @@ impl Parser {
             match self.peek().kind {
                 FUN => methods.push(self.fun_declaration()?),
                 IDENTIFIER => members.push(self.consume(IDENTIFIER)?.text),
-                _ => println!("error")
+                _ => {return Err(ParseError::UnexpectedToken);}
             }
         }
         Ok(Node::Class { name, members, methods })
