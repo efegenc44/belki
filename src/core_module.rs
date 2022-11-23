@@ -1,8 +1,44 @@
 use crate::interpreter::{ Interpreter, NativeFunction, RuntimeError };
-use crate::value::Value;
+use crate::value::{ Value, Type };
 
 pub fn init(interpreter: &mut Interpreter) {
     
+    interpreter.add_global_variable("Integer".to_string(),
+        Value::Type(Type::Int)
+    );
+
+    interpreter.add_global_variable("Float".to_string(),
+        Value::Type(Type::Float)
+    );
+
+    interpreter.add_global_variable("List".to_string(),
+        Value::Type(Type::List)
+    );
+
+    interpreter.add_global_variable("Bool".to_string(),
+        Value::Type(Type::Bool)
+    );
+
+    interpreter.add_global_variable("String".to_string(),
+        Value::Type(Type::String)
+    );
+
+    interpreter.add_global_variable("Function".to_string(),
+        Value::Type(Type::Function)
+    );
+
+    interpreter.add_global_variable("Module".to_string(),
+        Value::Type(Type::Module)
+    );
+    
+    interpreter.add_global_variable("Method".to_string(),
+        Value::Type(Type::Method)
+    );
+
+    interpreter.add_global_variable("Nothing".to_string(),
+        Value::Type(Type::Unit)
+    );
+
     interpreter.add_native_function(NativeFunction::new( 
         String::from("print"), 
         1,
@@ -16,8 +52,8 @@ pub fn init(interpreter: &mut Interpreter) {
     interpreter.add_native_function(NativeFunction::new( 
         String::from("type"), 
         1,
-        |interpreter, args| {
-            Ok(Value::String(args[0].get_type().get_string(interpreter)))
+        |_, args| {
+            Ok(Value::Type(args[0].get_type()))
         } 
     ));
 

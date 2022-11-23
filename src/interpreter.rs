@@ -6,7 +6,7 @@ use std::fs;
 use crate::core_module;
 use crate::math_module;
 
-use crate::value::Value;
+use crate::value::{ Value, Type };
 use crate::ast::Node;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
@@ -268,6 +268,10 @@ impl Interpreter {
         );
     }
 
+    pub fn add_global_variable(&mut self, name: String, value: Value) {
+        self.globals.insert(name, value);
+    }
+
     fn equality(&mut self, lhs_value: Value, rhs_value: Value) -> Result<Value, RuntimeError> {
         match (lhs_value.clone(), rhs_value.clone()) {
             (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a == b)),
@@ -276,6 +280,15 @@ impl Interpreter {
             (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 == b)),
             (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
             (Value::List(ida), Value::List(idb)) => Ok(Value::Bool(self.get_list(&ida) == self.get_list(&idb))),
+            (Value::Type(type1), Value::Type(type2)) => Ok(Value::Bool(type1 == type2)),
+            (Value::Type(typ), Value::ClassD(cid)) =>
+                if let Type::Custom(id) = typ {
+                    return Ok(Value::Bool(cid == id));
+                } else { Ok(Value::Bool(false)) }
+            (Value::ClassD(cid), Value::Type(typ)) => 
+                if let Type::Custom(id) = typ {
+                    return Ok(Value::Bool(cid == id));
+                } else { Ok(Value::Bool(false)) },
             _ => {
                 if std::mem::discriminant(&lhs_value) != 
                     std::mem::discriminant(&rhs_value) {

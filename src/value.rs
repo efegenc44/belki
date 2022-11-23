@@ -1,8 +1,10 @@
 use crate::interpreter::{Interpreter};
 
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Type {
+    Type,
+
     Int,
     Float,
     Bool,
@@ -11,8 +13,7 @@ pub enum Type {
     Custom(u64),
     Function,
     Module,
-    ClassDef(u64),
-    Method(u64, String),
+    Method,
 
     Unit,
     Void
@@ -21,6 +22,8 @@ pub enum Type {
 impl Type {
     pub fn get_string(self, interpreter: &mut Interpreter) -> String {
         match self {
+            Type::Type => "Type".to_string(),
+            
             Type::Int => "Integer".to_string(),
             Type::Float => "Float".to_string(),
             Type::Bool => "Bool".to_string(),
@@ -29,8 +32,7 @@ impl Type {
             Type::Function => "Function".to_string(),
             Type::Module => "Module".to_string(),
             Type::Custom(cid) => interpreter.get_classdef(&cid).name.clone(),
-            Type::ClassDef(_) => "Type".to_string(),
-            Type::Method(cid, _) => format!("Method of {}", interpreter.get_classdef(&cid).name.clone()),
+            Type::Method => "Method".to_string(),
             
             Type::Unit => "Unit".to_string(),
             Type::Void => "Void".to_string(),
@@ -51,7 +53,8 @@ pub enum Value {
     Module(u64),
     ClassD(u64),
     Method(u64 /* ins id */, u64 /* class id */, String /* method name */),
-    
+    Type(Type),
+
     Nothing, // Unit
     None,    // Void
 }
@@ -64,20 +67,23 @@ impl Value {
             Value::Bool(_)                  => Type::Bool,
             Value::String(_)                => Type::String,
             Value::List(_)                  => Type::List,
-            Value::Instance(cid, _)   => Type::Custom(*cid),
+            Value::Instance(cid, _)         => Type::Custom(*cid),
             Value::Function(_)              => Type::Function,
             Value::NativeFunction(_)        => Type::Function,
             Value::Module(_)                => Type::Module,
-            Value::ClassD(cid)        => Type::ClassDef(*cid),
-            Value::Method(_, 
-                cid, name)   => Type::Method(*cid, name.clone()),
+            Value::ClassD(_)                => Type::Type,
+            Value::Method(_, _, _)          => Type::Method,
+            
+            Value::Type(_)                  => Type::Type,
             Value::Nothing                  => Type::Unit,
-            Value::None                     => Type::Void
+            Value::None                     => Type::Void // ?
         }
     }
     
     pub fn get_string(&self, interpreter: &mut Interpreter) -> String {
         match self {
+            Value::Type(typ) => format!("<type: {}>", typ.clone().get_string(interpreter)),
+            
             Value::Int(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
             Value::String(s) => format!("'{}'", s.clone()),
