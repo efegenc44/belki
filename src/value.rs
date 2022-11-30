@@ -51,7 +51,6 @@ pub enum Value {
     Function(u64),
     NativeFunction(u64),
     Module(u64),
-    ClassD(u64),
     Method(u64 /* ins id */, u64 /* class id */, String /* method name */),
     Type(Type),
 
@@ -71,7 +70,6 @@ impl Value {
             Value::Function(_)              => Type::Function,
             Value::NativeFunction(_)        => Type::Function,
             Value::Module(_)                => Type::Module,
-            Value::ClassD(_)                => Type::Type,
             Value::Method(_, _, _)          => Type::Method,
             
             Value::Type(_)                  => Type::Type,
@@ -100,7 +98,6 @@ impl Value {
             },
             Value::Function(id) => format!("<function: {}>", interpreter.get_function(id).name),
             Value::NativeFunction(id) => format!("<native: {}>", interpreter.get_nfunction(id).name),
-            Value::ClassD(id) => format!("<class: {}>", interpreter.get_classdef(id).name),
             Value::Module(id) => format!("<module: {}>", interpreter.get_module(id).name),
             Value::Instance(_, id) => {
                 let mut s = String::from("{");

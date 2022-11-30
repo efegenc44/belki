@@ -281,14 +281,6 @@ impl Interpreter {
             (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
             (Value::List(ida), Value::List(idb)) => Ok(Value::Bool(self.get_list(&ida) == self.get_list(&idb))),
             (Value::Type(type1), Value::Type(type2)) => Ok(Value::Bool(type1 == type2)),
-            (Value::Type(typ), Value::ClassD(cid)) =>
-                if let Type::Custom(id) = typ {
-                    return Ok(Value::Bool(cid == id));
-                } else { Ok(Value::Bool(false)) }
-            (Value::ClassD(cid), Value::Type(typ)) => 
-                if let Type::Custom(id) = typ {
-                    return Ok(Value::Bool(cid == id));
-                } else { Ok(Value::Bool(false)) },
             _ => {
                 if std::mem::discriminant(&lhs_value) != 
                     std::mem::discriminant(&rhs_value) {
@@ -399,7 +391,7 @@ impl Interpreter {
                 self.class_id += 1;
                 self.current_scope.env.insert(
                     name,
-                    Value::ClassD(id)
+                    Value::Type(Type::Custom(id))
                 );
                 Ok(Value::None)                
             },
@@ -720,7 +712,11 @@ impl Interpreter {
                         }
                         function.call(id, self, &values)
                     }
-                    Value::ClassD(class_id) => {
+                    Value::Type(typ) => {
+                        let class_id = match typ {
+                            Type::Custom(id) => id,
+                            _ => {unreachable!()}
+                        };
                         let class = self.classes.get(&class_id).unwrap().clone();
                         if class.members.len() != node_args.len() {
                             return Err(RuntimeError::ArgNumMismatch);
