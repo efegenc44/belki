@@ -1,0 +1,14 @@
+
+let i = 0 
+while i < 5 {
+    if i == 4 {
+        {
+            i = 99 
+            break
+            i = 98
+        }
+    }
+    i = i + 1
+}
+
+assert(i == 99)

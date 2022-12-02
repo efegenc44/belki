@@ -1,4 +1,4 @@
-use crate::interpreter::{Interpreter};
+use crate::interpreter::Interpreter;
 
 
 #[derive(PartialEq, Debug, Clone)]
@@ -12,8 +12,8 @@ pub enum Type {
     List,
     Custom(u64),
     Function,
+    Range,
     Module,
-    Method,
 
     Unit,
     Void
@@ -31,8 +31,8 @@ impl Type {
             Type::List => "List".to_string(),
             Type::Function => "Function".to_string(),
             Type::Module => "Module".to_string(),
+            Type::Range => "Range".to_string(),
             Type::Custom(cid) => interpreter.get_classdef(&cid).name.clone(),
-            Type::Method => "Method".to_string(),
             
             Type::Unit => "Unit".to_string(),
             Type::Void => "Void".to_string(),
@@ -50,8 +50,8 @@ pub enum Value {
     Instance(u64 /* class id */, u64 /* ins id */),
     Function(u64),
     NativeFunction(u64),
+    Range(i32, i32),
     Module(u64),
-    Method(u64 /* ins id */, u64 /* class id */, String /* method name */),
     Type(Type),
 
     Nothing, // Unit
@@ -61,20 +61,20 @@ pub enum Value {
 impl Value {
     pub fn get_type(&self) -> Type {
         match self {
-            Value::Int(_)                   => Type::Int,
-            Value::Float(_)                 => Type::Float,
-            Value::Bool(_)                  => Type::Bool,
-            Value::String(_)                => Type::String,
-            Value::List(_)                  => Type::List,
-            Value::Instance(cid, _)         => Type::Custom(*cid),
-            Value::Function(_)              => Type::Function,
-            Value::NativeFunction(_)        => Type::Function,
-            Value::Module(_)                => Type::Module,
-            Value::Method(_, _, _)          => Type::Method,
+            Value::Int(_)            => Type::Int,
+            Value::Float(_)          => Type::Float,
+            Value::Bool(_)           => Type::Bool,
+            Value::String(_)         => Type::String,
+            Value::List(_)           => Type::List,
+            Value::Instance(cid, _)  => Type::Custom(*cid),
+            Value::Function(_)       => Type::Function,
+            Value::NativeFunction(_) => Type::Function,
+            Value::Range(_, _)       => Type::Range,
+            Value::Module(_)         => Type::Module,
+            Value::Type(_)           => Type::Type,
             
-            Value::Type(_)                  => Type::Type,
-            Value::Nothing                  => Type::Unit,
-            Value::None                     => Type::Void // ?
+            Value::Nothing           => Type::Unit,
+            Value::None              => Type::Void // ?
         }
     }
     
@@ -98,6 +98,7 @@ impl Value {
             },
             Value::Function(id) => format!("<function: {}>", interpreter.get_function(id).name),
             Value::NativeFunction(id) => format!("<native: {}>", interpreter.get_nfunction(id).name),
+            Value::Range(_, _) => format!("<range>"),
             Value::Module(id) => format!("<module: {}>", interpreter.get_module(id).name),
             Value::Instance(_, id) => {
                 let mut s = String::from("{");
@@ -107,9 +108,6 @@ impl Value {
                     s += &format!("{}: {}", key, value.get_string(interpreter));
                 } s += "}"; s
             }            
-            Value::Method(_, cid, name) => {
-                format!("<method '{}' of {}>", name, interpreter.get_classdef(cid).name)
-            }
         }
     }
 }

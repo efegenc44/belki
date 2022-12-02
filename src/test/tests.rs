@@ -71,4 +71,16 @@ mod tests {
         let res = crate::from_file(String::from("src/test/newline_awareness.txt"));
         assert!(res != None);
     }
+
+    #[test]
+    fn for_test() {
+        let res = crate::from_file(String::from("src/test/for_test.txt"));
+        assert!(res != None);
+    }
+
+    #[test]
+    fn while_break() {
+        let res = crate::from_file(String::from("src/test/while_break.txt"));
+        assert!(res != None);
+    }
 }

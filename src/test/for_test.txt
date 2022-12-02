@@ -1,0 +1,20 @@
+let l = []
+for a : 1..5 {
+    append(l, a)
+}
+
+assert(l == [1, 2, 3, 4])
+
+clear(l)
+let digits = 1..10
+for i : digits {
+    if i%2 != 0 {
+        continue
+    }
+    if i == 8 {
+        break
+    }
+    append(l, i)
+} 
+
+assert(l == [2, 4, 6])

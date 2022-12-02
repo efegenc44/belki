@@ -1,12 +1,3 @@
 let c = "c"
 
-class A {
-    d
-    fun f(this) {
-        return this.d
-    }
-
-    fun set(this, n) {
-        this.d = n
-    }
-}
+class A (d)

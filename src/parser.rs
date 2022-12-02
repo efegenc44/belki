@@ -118,10 +118,21 @@ impl Parser {
     }
 
     fn product(&mut self) -> Result<Node, ParseError> {
-        let t= self.next();
+        let t = self.next();
         let mut node = match t.kind {
-            INTEGER    => Node::Integer(t.text.parse::<i32>().unwrap()),
-            FLOAT      => Node::Float(t.text.parse::<f32>().unwrap()), 
+            INTEGER => {
+                if self.peek_with_nl().kind == DOT {
+                    self.consume(DOT).unwrap();
+                    let mut text = t.text.clone();                    
+                    text += ".";
+                    if self.peek().kind == INTEGER {
+                        let nt = self.next();
+                        text += &nt.text; 
+                    }
+                    return Ok(Node::Float(text.parse::<f32>().unwrap()))
+                }
+                Node::Integer(t.text.parse::<i32>().unwrap())
+            },
             STRING     => Node::String(t.text.to_string()),
             IDENTIFIER => Node::Identifier(t.text),
             TRUE       => Node::True,
@@ -183,7 +194,7 @@ impl Parser {
                         lhs: Box::new(node),
                         rhs: Box::new(rhs), 
                     }; continue;
-                },
+                }
                 _ => break
             }
         }
@@ -243,12 +254,21 @@ impl Parser {
 
     pub fn expression(&mut self) -> Result<Node, ParseError> {
         let lhs = self.logic()?;
-        if let EQUAL = self.peek().kind {
-            let t = self.peek().clone();
-            self.consume(t.kind)?;
-            let rhs = self.expression()?;
-            Ok(Node::Binary { op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs) })
-        } else { Ok(lhs) }
+        match self.peek().kind {
+            EQUAL => {
+                self.consume(EQUAL)?;
+                let rhs = self.expression()?;
+                Ok(Node::Binary { op: "=".into(), lhs: Box::new(lhs), rhs: Box::new(rhs) })
+            },
+            TWODOT => {
+                self.consume(TWODOT).unwrap();
+                let rhs = self.expression()?;
+                Ok(Node::Binary { 
+                    op: "..".into(), lhs: Box::new(lhs), rhs: Box::new(rhs) 
+                })
+            }
+            _ => Ok(lhs)
+        }
     }
 
     fn while_statement(&mut self) -> Result<Node, ParseError> {
@@ -299,17 +319,16 @@ impl Parser {
     fn class_declaration(&mut self) -> Result<Node, ParseError> {
         self.consume(CLASS)?;
         let name = self.consume(IDENTIFIER)?.text;
-        self.consume(LCURLY)?;
+        self.consume(LPAREN)?;
         let mut members = vec![];
-        let mut methods = vec![];
-        while !self.expect(RCURLY) {
-            match self.peek().kind {
-                FUN => methods.push(self.fun_declaration()?),
-                IDENTIFIER => members.push(self.consume(IDENTIFIER)?.text),
-                _ => {return Err(ParseError::UnexpectedToken);}
+        if !self.expect(RPAREN) {
+            members.push(self.consume(IDENTIFIER)?.text);
+            while !self.expect(RPAREN) {
+                self.consume(COMMA)?;
+                members.push(self.consume(IDENTIFIER)?.text);
             }
         }
-        Ok(Node::Class { name, members, methods })
+        Ok(Node::Class { name, members })
     }
 
     fn return_statement(&mut self) -> Result<Node, ParseError> {
@@ -331,6 +350,25 @@ impl Parser {
     fn import_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(IMPORT)?;
         Ok(Node::Import(self.consume(STRING)?.text))
+    }
+
+    fn break_statement(&mut self) -> Result<Node, ParseError> {
+        self.consume(BREAK)?;
+        Ok(Node::Break)
+    }
+
+    fn continue_statement(&mut self) -> Result<Node, ParseError> {
+        self.consume(CONTINUE)?;
+        Ok(Node::Continue)
+    }
+
+    fn for_statement(&mut self) -> Result<Node, ParseError> {
+        self.consume(FOR)?;
+        let var = self.consume(IDENTIFIER)?.text;
+        self.consume(COLON)?;
+        let iter = Box::new(self.expression()?);
+        let body = Box::new(self.block()?);
+        Ok(Node::For { var, iter, body })
     }
 
     fn block(&mut self) -> Result<Node, ParseError> {
@@ -355,15 +393,18 @@ impl Parser {
 
     fn statement(&mut self) -> Result<Node, ParseError> {
         let node = match self.peek().kind {
-            LCURLY => self.block()?,
-            LET    => self.let_statement()?,
-            RETURN => self.return_statement()?,
-            CLASS  => self.class_declaration()?,
-            FUN    => self.fun_declaration()?,
-            IF     => self.if_statement()?,
-            WHILE  => self.while_statement()?,
-            IMPORT => self.import_statement()?,
-            _      => self.expression()?,
+            LCURLY   => self.block()?,
+            LET      => self.let_statement()?,
+            RETURN   => self.return_statement()?,
+            BREAK    => self.break_statement()?,
+            CONTINUE => self.continue_statement()?,
+            CLASS    => self.class_declaration()?,
+            FUN      => self.fun_declaration()?,
+            IF       => self.if_statement()?,
+            WHILE    => self.while_statement()?,
+            IMPORT   => self.import_statement()?,
+            FOR      => self.for_statement()?,
+            _        => self.expression()?,
         };
         // Optional semi-colon
         self.expect(SEMICOLON);

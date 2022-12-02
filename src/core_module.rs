@@ -31,12 +31,12 @@ pub fn init(interpreter: &mut Interpreter) {
         Value::Type(Type::Module)
     );
     
-    interpreter.add_global_variable("Method".to_string(),
-        Value::Type(Type::Method)
-    );
-
     interpreter.add_global_variable("Nothing".to_string(),
         Value::Type(Type::Unit)
+    );
+
+    interpreter.add_global_variable("Range".to_string(),
+        Value::Type(Type::Range)
     );
 
     interpreter.add_native_function(NativeFunction::new( 
@@ -116,6 +116,52 @@ pub fn init(interpreter: &mut Interpreter) {
                 Value::Bool(t) =>
                     if !t { Err(RuntimeError::AssertionFailure) }
                     else { Ok(Value::None) },
+                _ => Err(RuntimeError::TypeMismatch)
+            } 
+        } 
+    ));
+
+    interpreter.add_native_function(NativeFunction::new( 
+        String::from("append"), 
+        2,
+        |interpreter: &mut Interpreter, args| {
+            match args[0] {
+                Value::List(idx) => {
+                    interpreter.get_list_mut(&idx).push(args[1].clone());
+                    Ok(Value::None)
+                }
+                _ => Err(RuntimeError::TypeMismatch)
+            } 
+        } 
+    ));
+
+    interpreter.add_native_function(NativeFunction::new( 
+        String::from("pop"), 
+        1,
+        |interpreter: &mut Interpreter, args| {
+            match args[0] {
+                Value::List(idx) => {
+                    interpreter.get_list_mut(&idx).pop();
+                    Ok(Value::None)
+                }
+                _ => Err(RuntimeError::TypeMismatch)
+            } 
+        } 
+    ));
+
+    interpreter.add_native_function(NativeFunction::new( 
+        String::from("clear"), 
+        1,
+        |interpreter: &mut Interpreter, args| {
+            match args[0].clone() {
+                Value::List(idx) => {
+                    interpreter.get_list_mut(&idx).clear();
+                    Ok(Value::None)
+                },
+                Value::String(mut string) => {
+                    string.clear();
+                    Ok(Value::None)
+                }
                 _ => Err(RuntimeError::TypeMismatch)
             } 
         } 

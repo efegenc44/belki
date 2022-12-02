@@ -45,7 +45,6 @@ fn repl() {
                 continue;
             }
         };
-        // node.print(0);
     
         match interpreter.eval(node) {
             Ok(_) => {}
@@ -78,6 +77,7 @@ fn from_file(path: String) -> Option<()> {
             return None;
         }
     };
+    
     let mut interpreter = interpreter::Interpreter::new();
     interpreter.init();
     

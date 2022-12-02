@@ -10,9 +10,5 @@ fun set(obj, n) {
 }
 
 set(o, 10)
-assert(o.f() == 10)
-
-o.set(20)
-assert(o.f() == 20)
-
+assert(o.d == 10)
 

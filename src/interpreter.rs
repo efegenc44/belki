@@ -19,10 +19,10 @@ pub enum RuntimeError {
     MemberAccessError,
     IndexOutOfRange,
     UndefinedVariable,
-    AbsendThisError,
     AlreadyDefinedVarible,
     DivisionByZero,
     AssertionFailure,
+    BadRange,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,7 +68,6 @@ impl Scope {
 pub struct ClassDef {
     pub name: String,
     pub members: Vec<String>,
-    pub methods: HashMap<String, Function>
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +129,8 @@ impl NativeFunction {
 pub struct Interpreter {
     current_scope: Scope,
     return_val   : Value,
+    break_flag   : bool,      
+    continue_flag: bool,      
     globals      : HashMap<String, Value>,
     
     repl         : bool,
@@ -153,9 +154,11 @@ impl Interpreter {
     pub fn new() -> Interpreter {
         Interpreter { 
             current_scope: Scope::new(),
-            globals      : HashMap::new(),
             return_val   : Value::None,
-            
+            break_flag   : false,
+            continue_flag: false,
+            globals      : HashMap::new(),
+
             repl: false,
 
             instances : HashMap::new(),
@@ -304,10 +307,13 @@ impl Interpreter {
             Node::Block(statements) => {
                 self.enter_scope();
                 for statement in statements {
-                    match self.return_val {
-                        Value::None => {self.eval(statement)?;},
-                        _ => break,   
+                    if self.return_val != Value::None ||
+                        self.break_flag || 
+                        self.continue_flag 
+                    {
+                        break
                     }
+                    self.eval(statement)?;
                 }
                 self.exit_scope(); 
                 Ok(Value::None)
@@ -365,6 +371,61 @@ impl Interpreter {
                 );
                 Ok(Value::None)
             },
+            Node::For { var, iter, body } => {
+                match self.eval(*iter)? {
+                    Value::List(idx) => {
+                        self.enter_scope();
+                        let list = self.get_list(&idx).clone();
+                        for i in list {
+                            if self.return_val != Value::None || self.break_flag {
+                                break
+                            }
+                            self.current_scope.env.insert(var.clone(), i.clone());
+                            self.eval(*body.clone())?;
+                            if self.continue_flag {
+                                self.continue_flag = false;
+                                continue;
+                            }
+                        }
+                        self.break_flag = false;
+                        self.exit_scope();
+                    },
+                    Value::String(string) => {
+                        self.enter_scope();
+                        for (_, i) in string.chars().enumerate() {
+                            if self.return_val != Value::None || self.break_flag {
+                                break
+                            }
+                            self.current_scope.env.insert(var.clone(), Value::String(i.into()));
+                            self.eval(*body.clone())?;
+                            if self.continue_flag {
+                                self.continue_flag = false;
+                                continue;
+                            }
+                        }
+                        self.break_flag = false;
+                        self.exit_scope();
+                    },
+                    Value::Range(de, a) => {
+                        self.enter_scope();
+                        for i in de..a {
+                            if self.return_val != Value::None || self.break_flag {
+                                break
+                            }
+                            self.current_scope.env.insert(var.clone(), Value::Int(i));
+                            self.eval(*body.clone())?;
+                            if self.continue_flag {
+                                self.continue_flag = false;
+                                continue;
+                            }
+                        }
+                        self.break_flag = false;
+                        self.exit_scope();
+                    }
+                    _ => {return Err(RuntimeError::TypeMismatch);}
+                }
+                Ok(Value::None)
+            }
             Node::Let { name, expr } => {
                 let val = self.eval(*expr)?;
                 // Maybe allow shadowing?
@@ -376,18 +437,12 @@ impl Interpreter {
                 self.return_val = self.eval(*expr)?;
                 Ok(Value::None)
             },
-            Node::Class { name, members, methods } => {
+            Node::Class { name, members } => {
                 if self.current_scope.env.contains_key(&name) {
                     return Err(RuntimeError::AlreadyDefinedVarible);
                 }
-                let mut values: HashMap<String, Function> = HashMap::new();
-                for method in methods {
-                    if let Node::Fun {name, args, body} = method {
-                        values.insert(name.clone(), Function { name, args, body: *body, closure: None });
-                    } else { unreachable!() }
-                }
                 let id = self.class_id;
-                self.classes.insert(id, ClassDef { name: name.clone(), members, methods: values });
+                self.classes.insert(id, ClassDef { name: name.clone(), members });
                 self.class_id += 1;
                 self.current_scope.env.insert(
                     name,
@@ -438,16 +493,21 @@ impl Interpreter {
                 }
             },
             Node::While { expr, body } => {
-                while self.return_val == Value::None {
+                while self.return_val == Value::None || self.break_flag {
                     match self.eval(*expr.clone())? {
                         Value::Bool(t) => {
                             if t {
                                 assert!(self.eval(*body.clone()).unwrap() == Value::None, "While didn't returned None");
+                                if self.continue_flag {
+                                    self.continue_flag = false;
+                                    continue;
+                                }
                             } else { return Ok(Value::None) }
                         },
                         _ => return Err(RuntimeError::TypeMismatch)
                     }
                 }
+                self.break_flag = false;
                 Ok(Value::None)
             },
             Node::Binary { op, lhs, rhs } => {
@@ -535,19 +595,18 @@ impl Interpreter {
                                 return Ok(Value::Bool(!b));
                             } else { unreachable!() }
                     "==" => self.equality(lhs_value, rhs_value),
-                    // {
-                    //     if lhs_value == rhs_value {
-                    //         Ok(Value::Bool(true))
-                    //     } else {
-                    //         Ok(Value::Bool(false))
-                    //     }
-                    // } 
                     "||" => match (lhs_value, rhs_value) {
                         (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a || b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
                     "&&" => match (lhs_value, rhs_value) {
                         (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a && b)),
+                        _ => Err(RuntimeError::TypeMismatch)
+                    },
+                    ".." => match (lhs_value, rhs_value) {
+                        (Value::Int(a), Value::Int(b)) => if a < b {
+                            Ok(Value::Range(a, b))
+                        } else { Err(RuntimeError::BadRange) }
                         _ => Err(RuntimeError::TypeMismatch)
                     }
                     "=" => match *lhs {
@@ -594,17 +653,11 @@ impl Interpreter {
                         _ => Err(RuntimeError::AssignmentError)
                     },
                     "." => match (lhs_value, *rhs.clone()) {                            
-                        (Value::Instance(class_id, id), Node::Identifier(member)) => {
+                        (Value::Instance(_, id), Node::Identifier(member)) => {
                             let ins = &self.instances[&id];
                             match ins.get(&member) {
                                 Some(val) => Ok(val.clone()),
-                                None => {
-                                    let class = self.classes.get(&class_id)
-                                        .expect("Class definition couldn't find.");
-                                    if class.methods.contains_key(&member) {
-                                        Ok(Value::Method(id, class_id, member))
-                                    } else { Err(RuntimeError::MemberAccessError) }
-                                }
+                                None => Err(RuntimeError::MemberAccessError) 
                             }
                         }
                         (Value::Module(id), Node::Identifier(member)) => {
@@ -614,7 +667,7 @@ impl Interpreter {
                             if res.is_none() {
                                 Err(RuntimeError::MemberAccessError)
                             } else { Ok(res.unwrap()) }
-                        }
+                        },
                         _ => Err(RuntimeError::TypeMismatch)
                     }
                     "[" => match (lhs_value, rhs_value) {
@@ -644,13 +697,21 @@ impl Interpreter {
                     _ => unreachable!() 
                 }
             },
-            Node::Integer(i)        => Ok(Value::Int(i)),
-            Node::Float(f)          => Ok(Value::Float(f)),
-            Node::String(s)      => Ok(Value::String(s)),
-            Node::True                   => Ok(Value::Bool(true)),
-            Node::False                  => Ok(Value::Bool(false)),
-            Node::Nothing                => Ok(Value::Nothing),
-            Node::None                   => Ok(Value::None),
+            Node::Integer(i) => Ok(Value::Int(i)),
+            Node::Float(f)   => Ok(Value::Float(f)),
+            Node::String(s)  => Ok(Value::String(s)),
+            Node::True       => Ok(Value::Bool(true)),
+            Node::False      => Ok(Value::Bool(false)),
+            Node::Nothing    => Ok(Value::Nothing),
+            Node::None       => Ok(Value::None),
+            Node::Break      => {
+                self.break_flag = true;
+                Ok(Value::None)
+            },
+            Node::Continue   => {
+                self.continue_flag = true;
+                Ok(Value::None)
+            },
             Node::Group(expr) => self.eval(*expr),
             Node::List(nodes) => {
                 let mut values: Vec<Value> = vec![];
@@ -706,6 +767,8 @@ impl Interpreter {
                     }
                     Value::Function(id) => {
                         let function = self.get_function(&id).clone(); 
+                        //let values: Vec<_> = 
+                        //    node_args.iter().map(|arg| self.eval(*arg)).collect();
                         let mut values = vec![];
                         for arg in node_args {
                             values.push(self.eval(arg)?);
@@ -730,29 +793,6 @@ impl Interpreter {
                         self.ins_id += 1;
                         Ok(Value::Instance(class_id, id))
                     },
-                    Value::Method(ins_id, class_id, method_name) => {
-                        let ins_val = Value::Instance(class_id, ins_id);
-                        let method = self.classes.get(&class_id).unwrap().methods.get(&method_name).unwrap().clone();                                        
-                        if method.args.len() == 0 || method.args[0] != "this".to_string() {
-                            return Err(RuntimeError::AbsendThisError);
-                        }
-                        if method.args.len() - 1 != node_args.len() {
-                            return Err(RuntimeError::ArgNumMismatch);
-                        }
-                        self.enter_scope();
-                        self.current_scope.env.insert("this".to_string(), ins_val);
-                        for i in 1..method.args.len() {
-                            let arg_val = self.eval(node_args[i-1].clone())?;
-                            self.current_scope.env.insert(
-                                method.args[i].clone(), arg_val.clone()
-                            );
-                        }
-                        
-                        let ret = self.eval(method.body);
-                        self.exit_scope();
-                        self.return_val = Value::None;
-                        ret
-                    }
                     _ => Err(RuntimeError::TypeMismatch)
                 }
             },

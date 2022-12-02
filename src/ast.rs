@@ -6,15 +6,21 @@ pub enum Node {
     Block(Vec<Node>),
     FunBlock(Vec<Node>), // Hack, I guess
     Import(String),
+    For {
+        var: String,
+        iter: Box<Node>,
+        body: Box<Node>
+    },
     Let {
         name: String, 
         expr: Box<Node>
     },
     Return(Box<Node>),
+    Break,
+    Continue,
     Class { 
         name: String, 
         members: Vec<String>, 
-        methods: Vec<Node>
     },
     Fun { 
         name: String, 
@@ -93,6 +99,14 @@ impl Node {
                 print_spaces(indent + 1);
                 println!("{}", path);
             },
+            Node::For { var, iter, body } => {
+                println!("for");
+                print_spaces(indent + 1);
+                println!("{}", var);
+                iter.print(indent + 1);
+                body.print(indent + 1);
+
+            }
             Node::Let { name, expr } => {
                 println!("let");
                 print_spaces(indent + 1);
@@ -103,7 +117,9 @@ impl Node {
                 println!("return");
                 expr.print(indent + 1);
             },
-            Node::Class { name, members, methods } => {
+            Node::Break => println!("break"),
+            Node::Continue => println!("continue"),
+            Node::Class { name, members } => {
                 println!("class");
                 print_spaces(indent + 1);
                 println!("{}", name);
@@ -112,10 +128,6 @@ impl Node {
                     print!("{} ", member);
                 }
                 let _ = stdout().flush();
-                println!();
-                for method in methods {
-                    method.print(indent + 1);
-                }
             },
             Node::Fun { name, args, body } => {
                 println!("fun");

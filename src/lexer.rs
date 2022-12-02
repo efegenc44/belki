@@ -48,23 +48,15 @@ impl Lexer {
     }
 
     fn number(&mut self) -> Result<Token, LexError> {
-        let mut token_kind = INTEGER;
         while self.peek().is_digit(10) {
             self.next();
         }
         
-        if self.expect('.') {
-            token_kind = FLOAT;
-            while self.peek().is_digit(10) {
-                self.next();
-            }   
-        }
-
         if self.peek().is_alphabetic() {
             return Err(LexError::UnexpectedCharacter);
         }
         
-        Ok(self.make_token(token_kind))
+        Ok(self.make_token(INTEGER))
     }
 
     fn identifier(&mut self) -> Result<Token, LexError> {
@@ -90,6 +82,9 @@ impl Lexer {
             "while"   => WHILE,
             "import"  => IMPORT,
             "return"  => RETURN,
+            "for"     => FOR,
+            "continue"=> CONTINUE,
+            "break"   => BREAK,
             _         => IDENTIFIER
         };
 
@@ -154,9 +149,11 @@ impl Lexer {
             '%'  => Ok(self.make_token(PERCENT   )),
             '^'  => Ok(self.make_token(CARET     )),
             ','  => Ok(self.make_token(COMMA     )),
-            '.'  => Ok(self.make_token(DOT       )),
             '\0' => Ok(self.make_token(END       )),
             '_'  => Ok(self.make_token(UNDERSCORE)),
+            '.'  => 
+                if self.expect('.') { Ok(self.make_token(TWODOT)) } 
+                else { Ok(self.make_token(DOT)) }
             '-' => 
                 if self.expect('>') { Ok(self.make_token(ARROW)) } 
                 else { Ok(self.make_token(MINUS)) }

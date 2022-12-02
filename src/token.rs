@@ -1,7 +1,7 @@
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenKind {
     // Literals.
-    STRING, IDENTIFIER, INTEGER, FLOAT, 
+    STRING, IDENTIFIER, INTEGER, 
 
     // One character tokens.
     LPAREN, RPAREN, LCURLY, RCURLY,
@@ -14,10 +14,11 @@ pub enum TokenKind {
     // Double character tokens.
     DAMPERSAND, DVLINE, DEQUAL, BANGEQUAL,
     GREATEREQUAL, LESSEQUAL, ARROW, PIPE,
+    TWODOT,
 
     // Keywords.
     CLASS, LET, FUN, TRUE, FALSE, 
-    NOTHING, IF, ELSE, 
+    NOTHING, IF, ELSE, FOR, BREAK, CONTINUE,
     WHILE, IMPORT, RETURN,   
 
     // WS Tokens.
