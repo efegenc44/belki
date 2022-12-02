@@ -71,6 +71,11 @@ impl Lexer {
         while self.peek().is_alphanumeric() || self.peek() == '_' {
             self.next();          
         }
+        
+        while self.peek() == '\'' {
+            self.next();
+        }
+
         let text = &self.source[self.start..self.current];
     
         let token_kind = match text {
