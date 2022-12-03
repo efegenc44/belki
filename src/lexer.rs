@@ -85,6 +85,7 @@ impl Lexer {
             "for"     => FOR,
             "continue"=> CONTINUE,
             "break"   => BREAK,
+            "module"  => MODULE,
             _         => IDENTIFIER
         };
 

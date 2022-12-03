@@ -19,7 +19,7 @@ pub enum TokenKind {
     // Keywords.
     CLASS, LET, FUN, TRUE, FALSE, 
     NOTHING, IF, ELSE, FOR, BREAK, CONTINUE,
-    WHILE, IMPORT, RETURN,   
+    WHILE, IMPORT, RETURN, MODULE,  
 
     // WS Tokens.
     END, COMMENT, WHITESPACE, NEWLINE

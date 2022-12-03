@@ -318,6 +318,18 @@ impl Interpreter {
                 self.exit_scope(); 
                 Ok(Value::None)
             },
+            Node::Block2(statements) => {
+                for statement in statements {
+                    if self.return_val != Value::None ||
+                        self.break_flag || 
+                        self.continue_flag 
+                    {
+                        break
+                    }
+                    self.eval(statement)?;
+                }
+                Ok(Value::None)
+            },
             Node::FunBlock(statements) => {
                 for statement in statements {
                     match self.return_val {
@@ -327,6 +339,21 @@ impl Interpreter {
                 }
                 Ok(self.return_val.clone())
             },
+            Node::Module(name, block) => {
+                self.enter_scope();
+                self.eval(*block)?;
+                let scope = self.current_scope.clone();
+                self.exit_scope();
+                
+                let id = self.mod_id;
+                self.modules.insert(id, Module { name: name.clone(), scope });
+                self.mod_id += 1;
+                self.current_scope.env.insert(
+                    name, 
+                    Value::Module(id)
+                );
+                Ok(Value::None)
+            }
             Node::Import(path) => {
                 if path == "math" {
                     math_module::init(self);

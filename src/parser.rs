@@ -380,6 +380,15 @@ impl Parser {
         Ok(Node::Block(statements))
     }
 
+    fn block2(&mut self) -> Result<Node, ParseError> {
+        self.consume(LCURLY)?;
+        let mut statements: Vec<Node> = vec![];
+        while !self.expect(RCURLY) {
+            statements.push(self.statement()?);
+        }
+        Ok(Node::Block2(statements))
+    }
+
     fn fun_block(&mut self) -> Result<Node, ParseError> {
         self.inside_function += 1;
         self.consume(LCURLY)?;
@@ -389,6 +398,13 @@ impl Parser {
         }
         self.inside_function -= 1;
         Ok(Node::FunBlock(statements))
+    }
+
+    fn module(&mut self) -> Result<Node, ParseError> {
+        self.consume(MODULE)?;
+        let name = self.consume(IDENTIFIER)?.text;
+        let block = Box::new(self.block2()?);
+        Ok(Node::Module(name, block))
     }
 
     fn statement(&mut self) -> Result<Node, ParseError> {
@@ -404,6 +420,7 @@ impl Parser {
             WHILE    => self.while_statement()?,
             IMPORT   => self.import_statement()?,
             FOR      => self.for_statement()?,
+            MODULE   => self.module()?,
             _        => self.expression()?,
         };
         // Optional semi-colon

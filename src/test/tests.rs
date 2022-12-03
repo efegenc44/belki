@@ -83,4 +83,10 @@ mod tests {
         let res = crate::from_file(String::from("src/test/while_break.txt"));
         assert!(res != None);
     }
+
+    #[test]
+    fn module_test() {
+        let res = crate::from_file(String::from("src/test/module_test.txt"));
+        assert!(res != None);
+    }
 }
