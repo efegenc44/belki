@@ -1,18 +1,15 @@
 fun closure(a) {
-    fun inner() {
+    return fun {
         return a
     }
-    return inner
 }
 
 fun closure2(a) {
-    fun inner() {
-        fun inner2() {
+    return fun {
+        return fun {
             return a
         }
-        return inner2
     }
-    return inner
 }
 
 let a = 45

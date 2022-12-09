@@ -99,6 +99,8 @@ impl Parser {
 
     fn consume(&mut self, expected: TokenKind) -> Result<Token, ParseError> {
         if !self.expect(expected) {
+            dbg!(self.peek());
+            dbg!(expected);
             Err(ParseError::UnexpectedToken)
         } else {
             Ok(self.tokens[self.current - 1].clone())
@@ -151,6 +153,22 @@ impl Parser {
                     operand: Box::new(operand)
                 }
             },
+            FUN => {
+                let mut args = vec![];
+                if self.peek().kind == LPAREN {
+                    self.consume(LPAREN)?;
+                    if !self.expect(RPAREN) {
+                        args.push(self.consume(IDENTIFIER)?.text);
+                        while !self.expect(RPAREN) {
+                            self.consume(COMMA)?;
+                            args.push(self.consume(IDENTIFIER)?.text);
+                        }
+                    }
+                }
+                let body = Box::new(self.fun_block()?);
+                Node::Fun { name: "".into(), args, body }
+            }
+            
             _ => {
                 dbg!(t);
                 return Err(ParseError::IllDefinedAST);
@@ -302,13 +320,15 @@ impl Parser {
     fn fun_declaration(&mut self) -> Result<Node, ParseError> {
         self.consume(FUN)?;
         let name = self.consume(IDENTIFIER)?.text;
-        self.consume(LPAREN)?;
         let mut args = vec![];
-        if !self.expect(RPAREN) {
-            args.push(self.consume(IDENTIFIER)?.text);
-            while !self.expect(RPAREN) {
-                self.consume(COMMA)?;
+        if self.peek().kind == LPAREN {
+            self.consume(LPAREN)?;
+            if !self.expect(RPAREN) {
                 args.push(self.consume(IDENTIFIER)?.text);
+                while !self.expect(RPAREN) {
+                    self.consume(COMMA)?;
+                    args.push(self.consume(IDENTIFIER)?.text);
+                }
             }
         }
         let body = Box::new(self.fun_block()?);

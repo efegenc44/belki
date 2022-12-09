@@ -148,6 +148,7 @@ pub struct Interpreter {
     class_id     : u64,
     func_id      : u64,
     nfunc_id     : u64,
+    lambda_id    : u64,
 }
 
 impl Interpreter {
@@ -174,6 +175,7 @@ impl Interpreter {
             class_id : 0,
             func_id  : 0,
             nfunc_id : 0,
+            lambda_id: 0,
         }
     }
     
@@ -481,8 +483,15 @@ impl Interpreter {
                 let closure = if let Some(_) = self.current_scope.upper {
                     Some(self.current_scope.env.clone())
                 } else { None };
-                self.add_function(Function { name, args, body: *body, closure });
-                Ok(Value::None)
+                if !name.is_empty() {
+                    self.add_function(Function { name, args, body: *body, closure });
+                    Ok(Value::None)
+                } else {
+                    let fname ="lambda ".to_string() + &self.lambda_id.to_string();
+                    self.lambda_id += 1;
+                    self.add_function(Function { name: fname, args, body: *body, closure });
+                    Ok(Value::Function(self.func_id - 1))
+                }
             },
             Node::If { expr, body, els } => {
                 match self.eval(*expr)? {
