@@ -8,6 +8,7 @@ pub enum Node {
     FunBlock(Vec<Node>), // Hack, I guess
     Module(String, Box<Node>),
     Import(String),
+    MapLit(Vec<(Node, Node)>),
     For {
         var: String,
         iter: Box<Node>,
@@ -106,6 +107,13 @@ impl Node {
                 println!("import");
                 print_spaces(indent + 1);
                 println!("{}", path);
+            },
+            Node::MapLit(map) => {
+                println!("map");
+                for (key, value) in map {
+                    key.print(indent + 1);
+                    value.print(indent + 1);
+                } 
             },
             Node::Module(name, body) => {
                 println!("module");

@@ -77,7 +77,7 @@ fn from_file(path: String) -> Option<()> {
             return None;
         }
     };
-    
+    // node.print(0);
     let mut interpreter = interpreter::Interpreter::new();
     interpreter.init();
     

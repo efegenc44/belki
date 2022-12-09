@@ -5,5 +5,34 @@ fun fib(n) {
     return fib(n-1) + fib(n-2)
 }
 
-assert(fib(10) == 55) 
+// assert(fib(10) == 55) 
 // 11 stackoverflows
+
+let fib_table = #[]
+fun memoized_fib(n) {
+    if contains(fib_table, n) {
+        return fib_table[n]
+    }
+    
+    if n <= 2 {
+        fib_table[n] = 1
+        return 1
+    }
+    let answer = memoized_fib(n-1) + memoized_fib(n-2) 
+    fib_table[n] = answer
+    return answer
+}
+
+// fib(10) |> print
+// fib_table |> print
+
+fun fib_iter(n) {
+    let fib = [0, 1]
+    for i : 2..n+1 {
+        let res = fib[i - 1] + fib[i - 2]
+        append(fib, res)
+    }
+    return fib[len(fib) - 1]
+}
+
+// fib_iter(46) |> print

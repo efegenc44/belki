@@ -149,6 +149,7 @@ impl Lexer {
             '*'  => Ok(self.make_token(STAR      )),
             '%'  => Ok(self.make_token(PERCENT   )),
             '^'  => Ok(self.make_token(CARET     )),
+            '#'  => Ok(self.make_token(HASH     )),
             ','  => Ok(self.make_token(COMMA     )),
             '\0' => Ok(self.make_token(END       )),
             '_'  => Ok(self.make_token(UNDERSCORE)),

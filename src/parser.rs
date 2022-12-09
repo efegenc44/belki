@@ -167,6 +167,23 @@ impl Parser {
                 }
                 let body = Box::new(self.fun_block()?);
                 Node::Fun { name: "".into(), args, body }
+            },
+            HASH => {
+                let mut elements = vec![];
+                self.consume(LSQUARE)?;
+                if !self.expect(RSQUARE) {
+                    let key = self.expression()?;
+                    self.consume(COLON)?;
+                    let value = self.expression()?;
+                    elements.push((key, value));
+                    while !self.expect(RSQUARE) {
+                        self.consume(COMMA)?;
+                        let key = self.expression()?;
+                        self.consume(COLON)?;
+                        let value = self.expression()?;
+                        elements.push((key, value));                    }
+                }
+                Node::MapLit(elements)
             }
             
             _ => {

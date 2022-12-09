@@ -6,10 +6,8 @@ WIP dynamically typed, interpreted programming language.
 
 - A Name
 - Better REPL
-- Anonymous functions
 - VSCode Extension
 - Refactoring
-- Map Literals
 - Error handling
 - Error messages
 - Better error messages

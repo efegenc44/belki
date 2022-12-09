@@ -166,4 +166,25 @@ pub fn init(interpreter: &mut Interpreter) {
             } 
         } 
     ));
+
+
+    interpreter.add_native_function(NativeFunction::new( 
+        String::from("contains"), 
+        2,
+        |interpreter: &mut Interpreter, args| {
+            match args[0] {
+                Value::List(idx) => {
+                    Ok(Value::Bool(interpreter.get_list(&idx).contains(&args[1])))
+                },
+                Value::Map(idx) => {
+                    let key = match args[1].to_keyvalue() {
+                        Some(_) => args[1].to_keyvalue().unwrap(),
+                        None => {return Err(RuntimeError::KeyError);}
+                    };
+                    Ok(Value::Bool(interpreter.get_map(&idx).contains_key(&key)))
+                }
+                _ => Err(RuntimeError::TypeMismatch)
+            } 
+        } 
+    ));
 }

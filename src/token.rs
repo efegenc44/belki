@@ -9,7 +9,7 @@ pub enum TokenKind {
     PLUS, STAR, SLASH, PERCENT, CARET,
     COMMA, DOT, UNDERSCORE, MINUS, 
     AMPERSAND, VLINE, GREATER, LESS,
-    BANG, EQUAL,
+    BANG, EQUAL, HASH,
     
     // Double character tokens.
     DAMPERSAND, DVLINE, DEQUAL, BANGEQUAL,

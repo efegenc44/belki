@@ -1,0 +1,8 @@
+let m = #["a": 1, "b": 2]
+
+assert(m["a"] == 1)
+
+m["c"] = 3
+
+assert(m["c"] == 3)
+assert(m["a"] == 1)

@@ -6,7 +6,7 @@ use std::fs;
 use crate::core_module;
 use crate::math_module;
 
-use crate::value::{ Value, Type };
+use crate::value::{ Value, Type, KeyValue };
 use crate::ast::Node;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
@@ -23,6 +23,8 @@ pub enum RuntimeError {
     DivisionByZero,
     AssertionFailure,
     BadRange,
+    KeyError,
+    HashError,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -141,6 +143,7 @@ pub struct Interpreter {
     modules      : HashMap<u64, Module>,
     functions    : HashMap<u64, Function>,
     nfunctions   : HashMap<u64, NativeFunction>,
+    maps         : HashMap<u64, HashMap<KeyValue, Value>>,
 
     ins_id       : u64,
     list_id      : u64,
@@ -149,6 +152,7 @@ pub struct Interpreter {
     func_id      : u64,
     nfunc_id     : u64,
     lambda_id    : u64,
+    map_id       : u64,
 }
 
 impl Interpreter {
@@ -168,6 +172,7 @@ impl Interpreter {
             modules   : HashMap::new(),
             functions : HashMap::new(),
             nfunctions: HashMap::new(),
+            maps      : HashMap::new(),
 
             ins_id   : 0,
             list_id  : 0,
@@ -176,6 +181,7 @@ impl Interpreter {
             func_id  : 0,
             nfunc_id : 0,
             lambda_id: 0,
+            map_id   : 0,
         }
     }
     
@@ -228,6 +234,10 @@ impl Interpreter {
 
     pub fn get_instance(&self, id: &u64) -> &HashMap<String, Value> {
         self.instances.get(id).expect("No Instance with this id.")
+    }
+
+    pub fn get_map(&self, id: &u64) -> &HashMap<KeyValue, Value> {
+        self.maps.get(id).expect("No Map with this id.")
     }
 
     pub fn add_native_function_to_module(&mut self, module_name: String, func: NativeFunction) {
@@ -400,6 +410,22 @@ impl Interpreter {
                 );
                 Ok(Value::None)
             },
+            Node::MapLit(map) => {
+                let mut hmap = HashMap::new();
+                for (k, v) in map {
+                    let key = self.eval(k)?.to_keyvalue(); 
+                    match key {
+                        Some(_) => {
+                            hmap.insert(key.unwrap(), self.eval(v)?);
+                        },
+                        None => {return Err(RuntimeError::HashError);}
+                    }
+                }
+                let id = self.map_id;
+                self.map_id += 1;
+                self.maps.insert(id, hmap);
+                Ok(Value::Map(id))
+            }
             Node::For { var, iter, body } => {
                 match self.eval(*iter)? {
                     Value::List(idx) => {
@@ -547,7 +573,10 @@ impl Interpreter {
                 Ok(Value::None)
             },
             Node::Binary { op, lhs, rhs } => {
-                let lhs_value = self.eval(*lhs.clone())?;
+                let mut lhs_value = Value::None;
+                if op.as_str() != "=" {
+                    lhs_value = self.eval(*lhs.clone())?;
+                }
                 let mut rhs_value = Value::None;
                 if op.as_str() != "." {
                     rhs_value = self.eval(*rhs.clone())?;
@@ -644,7 +673,7 @@ impl Interpreter {
                             Ok(Value::Range(a, b))
                         } else { Err(RuntimeError::BadRange) }
                         _ => Err(RuntimeError::TypeMismatch)
-                    }
+                    },
                     "=" => match *lhs {
                         Node::Identifier(var) => {
                             self.current_scope.assign(&var, &rhs_value)?;
@@ -673,12 +702,22 @@ impl Interpreter {
                                     },
                                     _ => Err(RuntimeError::MemberAccessError)
                                 }
-                                "[" => match (llhs_value, lrhs_value) {
+                                "[" => match (llhs_value, lrhs_value.clone()) {
                                     (Value::List(id), Value::Int(index)) => {
                                         let list = self.lists.get_mut(&id)
                                             .expect("List couldn't find.");
                                         if index as usize >= list.len() {return Err(RuntimeError::IndexOutOfRange);}
                                         let _ = std::mem::replace(&mut list[index as usize], rhs_value.clone());
+                                        Ok(rhs_value)
+                                    },
+                                    (Value::Map(id), _) => {
+                                        let key = lrhs_value.to_keyvalue();
+                                        if key.is_none() {
+                                            return Err(RuntimeError::KeyError);
+                                        }
+                                        let map = self.maps.get_mut(&id)
+                                            .expect("Map couldn't find.");
+                                        map.insert(key.unwrap(), rhs_value.clone());
                                         Ok(rhs_value)
                                     }
                                     _ => Err(RuntimeError::TypeMismatch)
@@ -706,7 +745,7 @@ impl Interpreter {
                         },
                         _ => Err(RuntimeError::TypeMismatch)
                     }
-                    "[" => match (lhs_value, rhs_value) {
+                    "[" => match (lhs_value, rhs_value.clone()) {
                         (Value::List(id), Value::Int(index)) => {
                             let list = self.get_list(&id);
                             if index as usize >= list.len() {return Err(RuntimeError::IndexOutOfRange);}
@@ -716,6 +755,19 @@ impl Interpreter {
                             let res = string.chars().nth(index as usize);
                             if res.is_none() { Err(RuntimeError::IndexOutOfRange) }
                             else { Ok(Value::String(res.unwrap().to_string())) }
+                        },
+                        (Value::Map(id), _) => {
+                            let key = rhs_value.to_keyvalue();
+                            if key.is_none() {
+                                return Err(RuntimeError::KeyError);
+                            }
+                            let map = self.get_map(&id);
+                            let o = &key.unwrap();
+                            if !map.contains_key(o) {
+                                Err(RuntimeError::KeyError)
+                            } else {
+                                Ok(map[o].clone())
+                            }
                         }
                         _ => Err(RuntimeError::TypeMismatch)
                     }
