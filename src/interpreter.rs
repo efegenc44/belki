@@ -25,6 +25,7 @@ pub enum RuntimeError {
     BadRange,
     KeyError,
     HashError,
+    ReturnedError,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -280,6 +281,16 @@ impl Interpreter {
         self.current_scope.env.insert(
             function.name, 
             Value::Function(id)
+        );
+    }
+
+    pub fn add_type(&mut self, typ: ClassDef) {
+        let id = self.class_id;
+        self.classes.insert(id, typ.clone());
+        self.class_id += 1;
+        self.current_scope.env.insert(
+            typ.name,
+            Value::Type(Type::Custom(id))
         );
     }
 
@@ -672,6 +683,10 @@ impl Interpreter {
                         (Value::Int(a), Value::Int(b)) => if a < b {
                             Ok(Value::Range(a, b))
                         } else { Err(RuntimeError::BadRange) }
+                        _ => Err(RuntimeError::TypeMismatch)
+                    },
+                    "::" => match (lhs_value.clone(), rhs_value) {
+                        (_, Value::Type(typ)) => Ok(Value::Bool(lhs_value.get_type() == typ)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
                     "=" => match *lhs {

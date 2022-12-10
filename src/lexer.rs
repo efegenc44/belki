@@ -143,7 +143,6 @@ impl Lexer {
             '}'  => Ok(self.make_token(RCURLY    )),
             '['  => Ok(self.make_token(LSQUARE   )),
             ']'  => Ok(self.make_token(RSQUARE   )),
-            ':'  => Ok(self.make_token(COLON     )),
             ';'  => Ok(self.make_token(SEMICOLON )),
             '+'  => Ok(self.make_token(PLUS      )),
             '*'  => Ok(self.make_token(STAR      )),
@@ -153,6 +152,9 @@ impl Lexer {
             ','  => Ok(self.make_token(COMMA     )),
             '\0' => Ok(self.make_token(END       )),
             '_'  => Ok(self.make_token(UNDERSCORE)),
+            ':'  => 
+                if self.expect(':') { Ok(self.make_token(DCOLON)) } 
+                else { Ok(self.make_token(COLON)) }
             '.'  => 
                 if self.expect('.') { Ok(self.make_token(TWODOT)) } 
                 else { Ok(self.make_token(DOT)) }

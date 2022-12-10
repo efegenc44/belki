@@ -45,7 +45,7 @@ fn repl() {
                 continue;
             }
         };
-    
+        // node.print(0);
         match interpreter.eval(node) {
             Ok(_) => {}
             Err(error) => {

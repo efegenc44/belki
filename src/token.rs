@@ -14,7 +14,7 @@ pub enum TokenKind {
     // Double character tokens.
     DAMPERSAND, DVLINE, DEQUAL, BANGEQUAL,
     GREATEREQUAL, LESSEQUAL, ARROW, PIPE,
-    TWODOT,
+    TWODOT, DCOLON,
 
     // Keywords.
     CLASS, LET, FUN, TRUE, FALSE, 

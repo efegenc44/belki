@@ -95,4 +95,10 @@ mod tests {
         let res = crate::from_file(String::from("src/test/map.txt"));
         assert!(res != None);
     }
+
+    #[test]
+    fn error() {
+        let res = crate::from_file(String::from("src/test/error.txt"));
+        assert!(res != None);
+    }
 }

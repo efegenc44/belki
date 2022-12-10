@@ -1,4 +1,4 @@
-use crate::interpreter::{ Interpreter, NativeFunction, RuntimeError };
+use crate::interpreter::{ Interpreter, NativeFunction, RuntimeError, ClassDef };
 use crate::value::{ Value, Type };
 
 pub fn init(interpreter: &mut Interpreter) {
@@ -38,6 +38,24 @@ pub fn init(interpreter: &mut Interpreter) {
     interpreter.add_global_variable("Range".to_string(),
         Value::Type(Type::Range)
     );
+
+    interpreter.add_type(ClassDef { 
+        name: "Error".into(), members: vec!["value".into()] 
+    });
+
+    interpreter.add_native_function(NativeFunction::new( 
+        String::from("ensure"), 
+        1,
+        |interpreter, args| {
+            match args[0].get_type() {
+                Type::Custom(id) => if "Error".to_string() == interpreter.get_classdef(&id).name {
+                    return Err(RuntimeError::ReturnedError);
+                }
+                _ => {}
+            }
+            Ok(args[0].clone())
+        } 
+    ));
 
     interpreter.add_native_function(NativeFunction::new( 
         String::from("print"), 

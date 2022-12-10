@@ -263,7 +263,7 @@ impl Parser {
     }
 
     fn relation(&mut self) -> Result<Node, ParseError> {
-        let lhs = self.arithmetic()?;
+        let mut lhs = self.arithmetic()?;
         if let DEQUAL | BANGEQUAL | GREATER | GREATEREQUAL | LESS | LESSEQUAL = self.peek().kind {
             let t = self.peek().clone();
             self.consume(t.kind)?;
@@ -271,7 +271,16 @@ impl Parser {
             Ok(Node::Binary { 
                 op: t.text, rhs: Box::new(rhs), lhs: Box::new(lhs) 
             })
-        } else { Ok(lhs) }
+        } else {
+            while let DCOLON = self.peek().kind {
+                let t = self.peek().clone();
+                self.consume(t.kind)?;
+                let rhs = self.arithmetic()?;
+                lhs = Node::Binary {
+                    op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
+                };
+            } Ok(lhs)
+        }
     }
 
     pub fn logic(&mut self) -> Result<Node, ParseError> {
