@@ -168,6 +168,14 @@ impl Parser {
                 let body = Box::new(self.fun_block()?);
                 Node::Fun { name: "".into(), args, body }
             },
+            IF => {
+                let cond = Box::new(self.expression()?);
+                self.consume(THEN)?;
+                let tru = Box::new(self.expression()?);
+                self.consume(ELSE)?;
+                let fals = Box::new(self.expression()?);
+                Node::IfExpr { cond, tru, fals }
+            }
             HASH => {
                 let mut elements = vec![];
                 self.consume(LSQUARE)?;
@@ -181,7 +189,8 @@ impl Parser {
                         let key = self.expression()?;
                         self.consume(COLON)?;
                         let value = self.expression()?;
-                        elements.push((key, value));                    }
+                        elements.push((key, value));                    
+                    }
                 }
                 Node::MapLit(elements)
             }
@@ -306,7 +315,7 @@ impl Parser {
             },
             TWODOT => {
                 self.consume(TWODOT).unwrap();
-                let rhs = self.expression()?;
+                let rhs = self.logic()?;
                 Ok(Node::Binary { 
                     op: "..".into(), lhs: Box::new(lhs), rhs: Box::new(rhs) 
                 })

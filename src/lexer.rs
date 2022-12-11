@@ -79,6 +79,7 @@ impl Lexer {
             "nothing" => NOTHING,
             "if"      => IF,
             "else"    => ELSE,
+            "then"    => THEN,
             "while"   => WHILE,
             "import"  => IMPORT,
             "return"  => RETURN,

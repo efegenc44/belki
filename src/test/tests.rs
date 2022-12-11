@@ -101,4 +101,10 @@ mod tests {
         let res = crate::from_file(String::from("src/test/error.txt"));
         assert!(res != None);
     }
+
+    #[test]
+    fn ifexpr() {
+        let res = crate::from_file(String::from("src/test/ifexpr.txt"));
+        assert!(res != None);
+    }
 }

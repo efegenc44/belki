@@ -1,0 +1,9 @@
+fun foo(a) {
+    return a + 5 
+}
+
+let b = if 1 < 2 then foo(4) + 6 else 3 - 1
+assert(b == 15)
+
+let c = if 3 < 2 then foo(4) + 4 else 3 - 1
+assert(c == 2)

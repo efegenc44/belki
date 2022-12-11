@@ -35,6 +35,11 @@ pub enum Node {
         body: Box<Node>,
         els:  Box<Node> 
     },
+    IfExpr {
+        cond: Box<Node>,
+        tru: Box<Node>,
+        fals: Box<Node> 
+    },
     Else {
         expr: Box<Node>,
         body: Box<Node>,
@@ -167,6 +172,12 @@ impl Node {
                 expr.print(indent + 1);
                 body.print(indent + 1);
                 els.print(indent + 1);
+            },
+            Node::IfExpr { cond, tru, fals } => {
+                println!("if expr");
+                cond.print(indent + 1);
+                tru.print(indent + 1);
+                fals.print(indent + 1);
             },
             Node::Else { expr, body, els } => {
                 println!("else");

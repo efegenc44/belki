@@ -503,6 +503,17 @@ impl Interpreter {
                 self.return_val = self.eval(*expr)?;
                 Ok(Value::None)
             },
+            Node::IfExpr { cond, tru, fals } => {
+                if let Value::Bool(t) = self.eval(*cond)? {
+                    if t {
+                        return Ok(self.eval(*tru)?)
+                    } else {
+                        return Ok(self.eval(*fals)?)
+                    }
+                } else {
+                    Err(RuntimeError::TypeMismatch)
+                }
+            },
             Node::Class { name, members } => {
                 if self.current_scope.env.contains_key(&name) {
                     return Err(RuntimeError::AlreadyDefinedVarible);
