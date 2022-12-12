@@ -310,7 +310,7 @@ impl Parser {
 
     pub fn logic(&mut self) -> Result<Node, ParseError> {
         let mut lhs = self.relation()?;
-        while let DVLINE | DAMPERSAND = self.peek().kind {
+        while let DAMPERSAND = self.peek().kind {
             let t = self.peek().clone();
             self.consume(t.kind)?;
             let rhs = self.relation()?;
@@ -321,8 +321,21 @@ impl Parser {
         Ok(lhs)
     }
 
+    pub fn logic_or(&mut self) -> Result<Node, ParseError> {
+        let mut lhs = self.logic()?;
+        while let DVLINE = self.peek().kind {
+            let t = self.peek().clone();
+            self.consume(t.kind)?;
+            let rhs = self.logic()?;
+            lhs = Node::Binary {
+                op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
+            };
+        }
+        Ok(lhs)
+    }
+
     pub fn expression(&mut self) -> Result<Node, ParseError> {
-        let lhs = self.logic()?;
+        let lhs = self.logic_or()?;
         match self.peek().kind {
             EQUAL => {
                 self.consume(EQUAL)?;
@@ -331,7 +344,7 @@ impl Parser {
             },
             TWODOT => {
                 self.consume(TWODOT).unwrap();
-                let rhs = self.logic()?;
+                let rhs = self.logic_or()?;
                 Ok(Node::Binary { 
                     op: "..".into(), lhs: Box::new(lhs), rhs: Box::new(rhs) 
                 })
