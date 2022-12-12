@@ -1,9 +1,9 @@
 fun get_index(word, char) {
     let i = 0
     while i < len(word) {
-        if word[i] == char {
+        if word[i] == char
             return i
-        }
+        
         i = i + 1
     }
 }

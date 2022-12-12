@@ -1,7 +1,6 @@
 fun fib(n) {
-    if n <= 2 {
+    if n <= 2
         return 1
-    }
     return fib(n-1) + fib(n-2)
 }
 
@@ -10,9 +9,8 @@ fun fib(n) {
 
 let fib_table = #[]
 fun memoized_fib(n) {
-    if contains(fib_table, n) {
+    if contains(fib_table, n)
         return fib_table[n]
-    }
     
     if n <= 2 {
         fib_table[n] = 1

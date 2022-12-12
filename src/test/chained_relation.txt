@@ -1,6 +1,5 @@
-fun is_in_range(a, b, c) {
-    return a <= c < b
-} 
+fun is_in_range(a, b, c) 
+    a <= c < b
 
 assert(is_in_range(1, 4, 3))
 assert(is_in_range(1, 4, 1))

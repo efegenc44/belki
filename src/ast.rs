@@ -41,9 +41,7 @@ pub enum Node {
         fals: Box<Node> 
     },
     Else {
-        expr: Box<Node>,
         body: Box<Node>,
-        els: Box<Node>
     },
     While {
         expr: Box<Node>,
@@ -179,11 +177,9 @@ impl Node {
                 tru.print(indent + 1);
                 fals.print(indent + 1);
             },
-            Node::Else { expr, body, els } => {
+            Node::Else { body } => {
                 println!("else");
-                expr.print(indent + 1);
                 body.print(indent + 1);
-                els.print(indent + 1);
             },  
             Node::While { expr, body } => {
                 println!("while");

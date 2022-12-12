@@ -1,16 +1,8 @@
-fun closure(a) {
-    return fun {
-        return a
-    }
-}
+fun closure(a)
+    fun a
 
-fun closure2(a) {
-    return fun {
-        return fun {
-            return a
-        }
-    }
-}
+fun closure2(a) 
+    fun fun a
 
 let a = 45
 let res = closure(23)()

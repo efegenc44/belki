@@ -2,7 +2,7 @@ fun return_if(n) {
     if n == 3 {
         return 3
         return 4
-    } else n == 5 {
+    } else if n == 5 {
         return 5
         return 6
     } else {

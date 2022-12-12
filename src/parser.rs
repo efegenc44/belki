@@ -165,7 +165,12 @@ impl Parser {
                         }
                     }
                 }
-                let body = Box::new(self.fun_block()?);
+                let body;
+                if self.peek().kind == LCURLY {
+                    body = Box::new(self.fun_block()?);
+                } else {
+                    body = Box::new(self.expression()?);
+                }
                 Node::Fun { name: "".into(), args, body }
             },
             IF => {
@@ -337,29 +342,23 @@ impl Parser {
 
     fn while_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(WHILE)?;
-        Ok(Node::While { expr: Box::new(self.expression()?), body: Box::new(self.block()?) })
+        Ok(Node::While { expr: Box::new(self.expression()?), body: Box::new(self.statement_wo_decs()?) })
     }
 
     fn if_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(IF)?;
         Ok(Node::If { 
             expr: Box::new(self.expression()?), 
-            body: Box::new(self.block()?), 
+            body: Box::new(self.statement_wo_decs()?), 
             els: if self.peek().kind == ELSE { Box::new(self.els()?) } else { Box::new(Node::None) } 
         })
     }
 
     fn els(&mut self) -> Result<Node, ParseError> {
         self.consume(ELSE)?;
-        if self.peek().kind == LCURLY {
-            Ok(Node::Else { expr: Box::new(Node::None), body: Box::new(self.block()?), els: Box::new(Node::None) })
-        } else {
-            Ok(Node::Else { 
-                expr: Box::new(self.expression()?), 
-                body: Box::new(self.block()?), 
-                els: if self.peek().kind == ELSE { Box::new(self.els()?) } else { Box::new(Node::None) } 
-            })
-        }
+        Ok(Node::Else { 
+            body: Box::new(self.statement_wo_decs()?), 
+        })
     }
 
     // todo
@@ -377,7 +376,12 @@ impl Parser {
                 }
             }
         }
-        let body = Box::new(self.fun_block()?);
+        let body;
+        if self.peek().kind == LCURLY {
+            body = Box::new(self.fun_block()?);
+        } else {
+            body = Box::new(self.expression()?);
+        }
         Ok(Node::Fun { name, args, body })
     }
     
@@ -433,7 +437,7 @@ impl Parser {
         let var = self.consume(IDENTIFIER)?.text;
         self.consume(COLON)?;
         let iter = Box::new(self.expression()?);
-        let body = Box::new(self.block()?);
+        let body = Box::new(self.statement_wo_decs()?);
         Ok(Node::For { var, iter, body })
     }
 
@@ -487,6 +491,23 @@ impl Parser {
             IMPORT   => self.import_statement()?,
             FOR      => self.for_statement()?,
             MODULE   => self.module()?,
+            _        => self.expression()?,
+        };
+        // Optional semi-colon
+        self.expect(SEMICOLON);
+        Ok(node)
+    }
+
+    fn statement_wo_decs(&mut self) -> Result<Node, ParseError> {
+        let node = match self.peek().kind {
+            LCURLY   => self.block()?,
+            RETURN   => self.return_statement()?,
+            BREAK    => self.break_statement()?,
+            CONTINUE => self.continue_statement()?,
+            IF       => self.if_statement()?,
+            WHILE    => self.while_statement()?,
+            IMPORT   => self.import_statement()?,
+            FOR      => self.for_statement()?,
             _        => self.expression()?,
         };
         // Optional semi-colon

@@ -9,13 +9,9 @@ fun map(func, list) {
     }
 }
 
-fun mul2(n) {
-    return n*2
-}
+fun mul2(n) n*2
 
-fun square(n) {
-    return n*n
-}
+fun square(n) n*n
 
 fun pow(base, power) {
     let res = 1;
@@ -28,14 +24,14 @@ fun pow(base, power) {
 }
 
 fun list_equality(list1, list2) {
-    if len(list1) != len(list2) {
+    if len(list1) != len(list2)
         return false
-    }
+
     let i = 0;
     while i < len(list1) {
-        if list1[i] != list2[i] {
+        if list1[i] != list2[i]
             return false
-        }
+
         i = i + 1
     }
     return true

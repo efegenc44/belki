@@ -3,24 +3,17 @@ module Song {
     
     class song (name, artist, genre)
 
-    fun set_name(song, name') {
+    fun set_name(song, name')
         song.name = name' 
-    }
 
-    fun get_french_translation() {
-        return song_in_french
-    }
+    fun get_french_translation() song_in_french
 
-    fun get_fun_that_gets_french_tranlastion() {
-        return get_french_translation
-    }
+    fun get_fun_that_gets_french_tranlastion() get_french_translation
 
     fun a() {
         {
             let f = 8
-            fun b() {
-                return f
-            }
+            fun b() f
             return b
         }
     }

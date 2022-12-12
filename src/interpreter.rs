@@ -545,43 +545,25 @@ impl Interpreter {
                 match self.eval(*expr)? {
                     Value::Bool(t) => {
                         if t {
-                            assert!(self.eval(*body).unwrap() == Value::None, "If didn't returned None");
+                            self.eval(*body)?;
                         } else {
-                            assert!(self.eval(*els).unwrap() == Value::None, "If didn't returned None");
+                            self.eval(*els)?;
                         }
                         Ok(Value::None)
                     },
                     _ => Err(RuntimeError::TypeMismatch)
                 }
             },
-            Node::Else { expr, body, els } => {
-                match *expr {
-                    Node::None => { 
-                        assert!(self.eval(*body).unwrap() == Value::None, "Else didn't returned None");
-                        assert!(*els == Node::None, "Unexpected Else Statement.");
-                        Ok(Value::None)
-                    },
-                    _ => {
-                        match self.eval(*expr)? {
-                            Value::Bool(t) => {
-                                if t {
-                                    assert!(self.eval(*body).unwrap() == Value::None, "Else didn't returned None");
-                                } else {
-                                    assert!(self.eval(*els).unwrap() == Value::None, "Else didn't returned None");
-                                }
-                                Ok(Value::None)
-                            },
-                            _ => Err(RuntimeError::TypeMismatch)
-                        }
-                    }
-                }
+            Node::Else { body } => {
+                self.eval(*body)?;    
+                Ok(Value::None)
             },
             Node::While { expr, body } => {
                 while self.return_val == Value::None || self.break_flag {
                     match self.eval(*expr.clone())? {
                         Value::Bool(t) => {
                             if t {
-                                assert!(self.eval(*body.clone()).unwrap() == Value::None, "While didn't returned None");
+                                self.eval(*body.clone())?;
                                 if self.continue_flag {
                                     self.continue_flag = false;
                                     continue;

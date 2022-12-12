@@ -1,13 +1,11 @@
 fun fizzbuzz_step(n) {
-    if n % 15 == 0 {
+    if n%15 == 0
         return "FizzBuzz"
-    } else n % 3 == 0 {
+    else if n%3 == 0
         return "Fizz"
-    } else n % 5 == 0 {
+    else if n%5 == 0
         return "Buzz"
-    } else {
-        return n
-    }
+    else return n
 } 
 
 assert(fizzbuzz_step(15) == "FizzBuzz")
