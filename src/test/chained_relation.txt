@@ -1,0 +1,8 @@
+fun is_in_range(a, b, c) {
+    return a <= c < b
+} 
+
+assert(is_in_range(1, 4, 3))
+assert(is_in_range(1, 4, 1))
+assert(!is_in_range(1, 4, 4))
+assert(!is_in_range(1, 4, 5))

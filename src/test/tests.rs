@@ -107,4 +107,10 @@ mod tests {
         let res = crate::from_file(String::from("src/test/ifexpr.txt"));
         assert!(res != None);
     }
+
+    #[test]
+    fn chained_relation() {
+        let res = crate::from_file(String::from("src/test/chained_relation.txt"));
+        assert!(res != None);
+    }
 }

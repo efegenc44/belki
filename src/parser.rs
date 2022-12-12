@@ -276,10 +276,21 @@ impl Parser {
         if let DEQUAL | BANGEQUAL | GREATER | GREATEREQUAL | LESS | LESSEQUAL = self.peek().kind {
             let t = self.peek().clone();
             self.consume(t.kind)?;
-            let rhs = self.arithmetic()?;
-            Ok(Node::Binary { 
-                op: t.text, rhs: Box::new(rhs), lhs: Box::new(lhs) 
-            })
+            let mut rhs = self.arithmetic()?;
+            let mut a = Node::Binary { 
+                op: t.text, rhs: Box::new(rhs.clone()), lhs: Box::new(lhs.clone()) 
+            };
+            while let DEQUAL | BANGEQUAL | GREATER | GREATEREQUAL | LESS | LESSEQUAL = self.peek().kind {
+                let t = self.peek().clone();
+                lhs = rhs.clone();
+                self.consume(t.kind)?;
+                rhs = self.arithmetic()?;
+                let b = Node::Binary { 
+                    op: t.text, rhs: Box::new(rhs.clone()), lhs: Box::new(lhs.clone()) 
+                };
+                a = Node::Binary { op: "&&".into(), lhs: Box::new(a), rhs: Box::new(b) }; 
+            }
+            Ok(a)
         } else {
             while let DCOLON = self.peek().kind {
                 let t = self.peek().clone();
