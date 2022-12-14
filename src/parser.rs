@@ -223,7 +223,7 @@ impl Parser {
                 LPAREN => {
                     self.consume(LPAREN)?;
                     let args = self.expression_list(RPAREN)?;
-                    node = Node::FunCall { 
+                    node = Node::Application { 
                         fun: Box::new(node), 
                         args
                     }; continue;
@@ -369,9 +369,7 @@ impl Parser {
 
     fn els(&mut self) -> Result<Node, ParseError> {
         self.consume(ELSE)?;
-        Ok(Node::Else { 
-            body: Box::new(self.statement_wo_decs()?), 
-        })
+        self.statement_wo_decs()
     }
 
     // todo

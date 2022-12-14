@@ -1,0 +1,7 @@
+let c = 5
+
+module A {
+    let b = c
+}
+
+A.b |> print

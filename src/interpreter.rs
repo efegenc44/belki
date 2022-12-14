@@ -73,16 +73,35 @@ pub struct ClassDef {
     pub members: Vec<String>,
 }
 
+type Env = HashMap<String, Value>; 
+
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: String,
+    pub id  : u64,
     pub args: Vec<String>,
     pub body: Node,
-    pub closure: Option<HashMap<String, Value>>
+    pub closure: Option<Env>
+}
+#[derive(Clone)]
+pub struct NativeFunction {
+    pub name: String,
+    pub arity: usize,
+    pub body: fn(&mut Interpreter, &[Value]) -> Result<Value, RuntimeError>,
 }
 
-impl Function {
-    pub fn call(&self, func_id: u64, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, RuntimeError> {
+impl NativeFunction {
+    pub fn new(name: String, arity: usize, body: fn(&mut Interpreter, &[Value]) -> Result<Value, RuntimeError>) -> NativeFunction {
+        NativeFunction { name, arity, body }
+    }
+}
+
+pub trait Applicable {
+    fn apply(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, RuntimeError>;
+}
+
+impl Applicable for Function {
+    fn apply(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, RuntimeError> {
         if self.args.len() != args.len() {
             return Err(RuntimeError::ArgNumMismatch);
         }
@@ -95,7 +114,7 @@ impl Function {
         // self-reference 
         interpreter.current_scope.env.insert(
             self.name.clone(), 
-            Value::Function(func_id)
+            Value::Function(self.id)
         );
         for i in 0..self.args.len() {
             interpreter.current_scope.env.insert(
@@ -109,24 +128,34 @@ impl Function {
     }
 }
 
-#[derive(Clone)]
-pub struct NativeFunction {
-    pub name: String,
-    pub arity: usize,
-    pub body: fn(&mut Interpreter, &[Value]) -> Result<Value, RuntimeError>,
-}
-
-impl NativeFunction {
-    pub fn new(name: String, arity: usize, body: fn(&mut Interpreter, &[Value]) -> Result<Value, RuntimeError>) -> NativeFunction {
-        NativeFunction { name, arity, body }
-    }
-
-    pub fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, RuntimeError> {
+impl Applicable for NativeFunction {
+    fn apply(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, RuntimeError> {
         if self.arity != args.len() {
             return Err(RuntimeError::ArgNumMismatch);
         }
         (self.body)(interpreter, args)
-    } 
+    }
+}
+
+impl Applicable for Type {
+    fn apply(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, RuntimeError> {
+        let class_id = match self {
+            Type::Custom(id) => id,
+            _ => {unreachable!()}
+        };
+        let class = interpreter.get_classdef(&class_id).clone();
+        if class.members.len() != args.len() {
+            return Err(RuntimeError::ArgNumMismatch);
+        }
+        let mut values = HashMap::new();
+        for i in 0..class.members.len() {
+            values.insert(class.members[i].clone(), args[i].clone());
+        }
+        let id = interpreter.ins_id;
+        interpreter.instances.insert(id, values);
+        interpreter.ins_id += 1;
+        Ok(Value::Instance(*class_id, id))
+    }
 }
 
 pub struct Interpreter {
@@ -140,7 +169,7 @@ pub struct Interpreter {
 
     instances    : HashMap<u64, HashMap<String, Value>>,
     lists        : HashMap<u64, Vec<Value>>,
-    classes      : HashMap<u64, ClassDef>,
+    types        : HashMap<u64, ClassDef>,
     modules      : HashMap<u64, Module>,
     functions    : HashMap<u64, Function>,
     nfunctions   : HashMap<u64, NativeFunction>,
@@ -149,7 +178,7 @@ pub struct Interpreter {
     ins_id       : u64,
     list_id      : u64,
     mod_id       : u64,
-    class_id     : u64,
+    type_id      : u64,
     func_id      : u64,
     nfunc_id     : u64,
     lambda_id    : u64,
@@ -169,7 +198,7 @@ impl Interpreter {
 
             instances : HashMap::new(),
             lists     : HashMap::new(),
-            classes   : HashMap::new(),
+            types     : HashMap::new(),
             modules   : HashMap::new(),
             functions : HashMap::new(),
             nfunctions: HashMap::new(),
@@ -178,7 +207,7 @@ impl Interpreter {
             ins_id   : 0,
             list_id  : 0,
             mod_id   : 0,
-            class_id : 0,
+            type_id  : 0,
             func_id  : 0,
             nfunc_id : 0,
             lambda_id: 0,
@@ -226,7 +255,7 @@ impl Interpreter {
     }
 
     pub fn get_classdef(&self, id: &u64) -> &ClassDef {
-        self.classes.get(id).expect("No Class with this id.")
+        self.types.get(id).expect("No Class with this id.")
     }
 
     pub fn get_module(&self, id: &u64) -> &Module {
@@ -285,9 +314,9 @@ impl Interpreter {
     }
 
     pub fn add_type(&mut self, typ: ClassDef) {
-        let id = self.class_id;
-        self.classes.insert(id, typ.clone());
-        self.class_id += 1;
+        let id = self.type_id;
+        self.types.insert(id, typ.clone());
+        self.type_id += 1;
         self.current_scope.env.insert(
             typ.name,
             Value::Type(Type::Custom(id))
@@ -315,6 +344,13 @@ impl Interpreter {
                 Err(RuntimeError::TypeMismatch)
             }
         }
+    }
+
+    fn collect_values(&mut self, nodes: Vec<Node>) -> Result<Vec<Value>, RuntimeError> {
+        let mut values = vec![];
+        for node in nodes { 
+            values.push(self.eval(node)?); 
+        }; Ok(values)
     }
 
     pub fn eval(&mut self, node: Node) -> Result<Value, RuntimeError> {
@@ -364,8 +400,13 @@ impl Interpreter {
             },
             Node::Module(name, block) => {
                 self.enter_scope();
+                let up = self.current_scope.upper.clone();
+                self.current_scope.upper = None;
+                self.enter_scope();
                 self.eval(*block)?;
                 let scope = self.current_scope.clone();
+                self.exit_scope();
+                self.current_scope.upper = up;
                 self.exit_scope();
                 
                 let id = self.mod_id;
@@ -405,7 +446,7 @@ impl Interpreter {
                 };
                 let cs = self.current_scope.clone();
                 self.current_scope = Scope::new();
-                    self.eval(node)?;
+                self.eval(node)?;
                 
                 let name = path
                     .split("/").collect::<Vec<_>>().last().unwrap().to_string()    
@@ -426,9 +467,7 @@ impl Interpreter {
                 for (k, v) in map {
                     let key = self.eval(k)?.to_keyvalue(); 
                     match key {
-                        Some(_) => {
-                            hmap.insert(key.unwrap(), self.eval(v)?);
-                        },
+                        Some(_) => {hmap.insert(key.unwrap(), self.eval(v)?);},
                         None => {return Err(RuntimeError::HashError);}
                     }
                 }
@@ -494,33 +533,29 @@ impl Interpreter {
             }
             Node::Let { name, expr } => {
                 let val = self.eval(*expr)?;
-                // Maybe allow shadowing?
                 if !self.current_scope.env.contains_key(&name) {
                     self.current_scope.env.insert(name, val); Ok(Value::None)
-                } else { Err(RuntimeError::AlreadyDefinedVarible) }
+                } else { 
+                    Err(RuntimeError::AlreadyDefinedVarible) 
+                }
             },
             Node::Return(expr) => {
                 self.return_val = self.eval(*expr)?;
                 Ok(Value::None)
             },
-            Node::IfExpr { cond, tru, fals } => {
-                if let Value::Bool(t) = self.eval(*cond)? {
-                    if t {
-                        return Ok(self.eval(*tru)?)
-                    } else {
-                        return Ok(self.eval(*fals)?)
-                    }
-                } else {
-                    Err(RuntimeError::TypeMismatch)
+            Node::IfExpr { cond, tru, fals } => if let Value::Bool(t) = self.eval(*cond)? {
+                    if t { Ok(self.eval(*tru)?) } 
+                    else { Ok(self.eval(*fals)?) }
+                } else { 
+                    Err(RuntimeError::TypeMismatch) 
                 }
-            },
             Node::Class { name, members } => {
                 if self.current_scope.env.contains_key(&name) {
                     return Err(RuntimeError::AlreadyDefinedVarible);
                 }
-                let id = self.class_id;
-                self.classes.insert(id, ClassDef { name: name.clone(), members });
-                self.class_id += 1;
+                let id = self.type_id;
+                self.types.insert(id, ClassDef { name: name.clone(), members });
+                self.type_id += 1;
                 self.current_scope.env.insert(
                     name,
                     Value::Type(Type::Custom(id))
@@ -532,32 +567,21 @@ impl Interpreter {
                     Some(self.current_scope.env.clone())
                 } else { None };
                 if !name.is_empty() {
-                    self.add_function(Function { name, args, body: *body, closure });
+                    self.add_function(Function { name, id: self.func_id, args, body: *body, closure });
                     Ok(Value::None)
                 } else {
-                    let fname ="lambda ".to_string() + &self.lambda_id.to_string();
+                    let fname ="lambda ".into();
                     self.lambda_id += 1;
-                    self.add_function(Function { name: fname, args, body: *body, closure });
+                    self.add_function(Function { name: fname, id: self.func_id, args, body: *body, closure });
                     Ok(Value::Function(self.func_id - 1))
                 }
             },
-            Node::If { expr, body, els } => {
-                match self.eval(*expr)? {
-                    Value::Bool(t) => {
-                        if t {
-                            self.eval(*body)?;
-                        } else {
-                            self.eval(*els)?;
-                        }
-                        Ok(Value::None)
-                    },
-                    _ => Err(RuntimeError::TypeMismatch)
-                }
-            },
-            Node::Else { body } => {
-                self.eval(*body)?;    
-                Ok(Value::None)
-            },
+            Node::If { expr, body, els } => if let Value::Bool(t) = self.eval(*expr)? {
+                if t { Ok(self.eval(*body)?) } 
+                else { Ok(self.eval(*els)?) }
+            } else { 
+                Err(RuntimeError::TypeMismatch) 
+            }
             Node::While { expr, body } => {
                 while self.return_val == Value::None || self.break_flag {
                     match self.eval(*expr.clone())? {
@@ -577,17 +601,16 @@ impl Interpreter {
                 Ok(Value::None)
             },
             Node::Binary { op, lhs, rhs } => {
-                let mut lhs_value = Value::None;
+                let mut left_value = Value::None;
                 if op.as_str() != "=" {
-                    lhs_value = self.eval(*lhs.clone())?;
+                    left_value = self.eval(*lhs.clone())?;
                 }
-                let mut rhs_value = Value::None;
+                let mut right_value = Value::None;
                 if op.as_str() != "." {
-                    rhs_value = self.eval(*rhs.clone())?;
+                    right_value = self.eval(*rhs.clone())?;
                 }
-                // Refactor, hopefully
                 match op.as_str() {
-                    "+" => match (lhs_value, rhs_value) {
+                    "+" => match (left_value, right_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
                         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
                         (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + b as f32)),
@@ -595,97 +618,94 @@ impl Interpreter {
                         (Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     } 
-                    "-" => match (lhs_value, rhs_value) {
+                    "-" => match (left_value, right_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
                         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
                         (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a - b as f32)),
                         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(a as f32 - b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     }
-                    "*" => match (lhs_value, rhs_value) {
+                    "*" => match (left_value, right_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
                         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
                         (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a * b as f32)),
                         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(a as f32 * b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     }
-                    "/" => match (lhs_value, rhs_value) {
-                        (Value::Int(a), Value::Int(b)) => {
+                    "/" => match (left_value, right_value) {
+                        (Value::Int(a), Value::Int(b)) =>
                             if b != 0 { Ok(Value::Int(a / b)) } 
                             else { Err(RuntimeError::DivisionByZero) }
-                        },
-                        (Value::Float(a), Value::Float(b)) => {
+                        (Value::Float(a), Value::Float(b)) =>
                             if b != 0.0 { Ok(Value::Float(a / b)) } 
                             else { Err(RuntimeError::DivisionByZero) }
-                        },
-                        (Value::Float(a), Value::Int(b)) => {
+                        (Value::Float(a), Value::Int(b)) => 
                             if b != 0 { Ok(Value::Float(a / b as f32)) } 
                             else { Err(RuntimeError::DivisionByZero) }
-                        },
-                        (Value::Int(a), Value::Float(b)) => {
+                        (Value::Int(a), Value::Float(b)) => 
                             if b != 0.0 { Ok(Value::Float(a as f32 / b)) } 
                             else { Err(RuntimeError::DivisionByZero) }
-                        }
                         _ => Err(RuntimeError::TypeMismatch)
                     }
-                    "%" => match (lhs_value, rhs_value) {
+                    "%" => match (left_value, right_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a % b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     }
-                    "<=" => match (lhs_value, rhs_value) {
+                    "<=" => match (left_value, right_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a <= b)),
                         (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a <= b)),
                         (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a <= b as f32)),
                         (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 <= b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
-                    ">=" => match (lhs_value, rhs_value) {
+                    ">=" => match (left_value, right_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a >= b)),
                         (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a >= b)),
                         (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a >= b as f32)),
                         (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 >= b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
-                    "<" => match (lhs_value, rhs_value) {
+                    "<" => match (left_value, right_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a < b)),
                         (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a < b)),
                         (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a < b as f32)),
                         (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((a as f32) < b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
-                    ">" => match (lhs_value, rhs_value) {
+                    ">" => match (left_value, right_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a > b)),
                         (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a > b)),
                         (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a > b as f32)),
                         (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 > b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
-                    "!=" => if let Value::Bool(b) = self.equality(lhs_value, rhs_value)? {
+                    "!=" => if let Value::Bool(b) = self.equality(left_value, right_value)? {
                                 return Ok(Value::Bool(!b));
                             } else { unreachable!() }
-                    "==" => self.equality(lhs_value, rhs_value),
-                    "||" => match (lhs_value, rhs_value) {
+                    "==" => self.equality(left_value, right_value),
+                    "||" => match (left_value, right_value) {
                         (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a || b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
-                    "&&" => match (lhs_value, rhs_value) {
+                    "&&" => match (left_value, right_value) {
                         (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a && b)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
-                    ".." => match (lhs_value, rhs_value) {
-                        (Value::Int(a), Value::Int(b)) => if a < b {
-                            Ok(Value::Range(a, b))
-                        } else { Err(RuntimeError::BadRange) }
+                    ".." => match (left_value, right_value) {
+                        (Value::Int(a), Value::Int(b)) => 
+                            if a < b {
+                                Ok(Value::Range(a, b))
+                            } else { Err(RuntimeError::BadRange) }
                         _ => Err(RuntimeError::TypeMismatch)
                     },
-                    "::" => match (lhs_value.clone(), rhs_value) {
-                        (_, Value::Type(typ)) => Ok(Value::Bool(lhs_value.get_type() == typ)),
+                    "::" => match (left_value.clone(), right_value) {
+                        (_, Value::Type(typ)) => Ok(Value::Bool(left_value.get_type() == typ)),
                         _ => Err(RuntimeError::TypeMismatch)
                     },
                     "=" => match *lhs {
                         Node::Identifier(var) => {
-                            self.current_scope.assign(&var, &rhs_value)?;
-                            Ok(rhs_value)
+                            self.current_scope.assign(&var, &right_value)?;
+                            Ok(right_value)
                         },
                         Node::Binary { op, lhs, rhs } => {
                             let llhs_value = self.eval(*lhs.clone())?;
@@ -699,14 +719,14 @@ impl Interpreter {
                                         let ins = self.instances.get_mut(&id)
                                             .expect("Instance couldn't find.");
                                         let attr = ins.get_mut(&member).unwrap();
-                                        *attr = rhs_value.clone();
-                                        Ok(rhs_value)
+                                        *attr = right_value.clone();
+                                        Ok(right_value)
                                     }
                                     (Value::Module(id), Node::Identifier(member)) => {
                                         let module = self.modules.get_mut(&id)
                                             .expect("Module couldn't find.");
-                                        module.scope.assign(&member, &rhs_value)?;
-                                        Ok(rhs_value)
+                                        module.scope.assign(&member, &right_value)?;
+                                        Ok(right_value)
                                     },
                                     _ => Err(RuntimeError::MemberAccessError)
                                 }
@@ -715,8 +735,8 @@ impl Interpreter {
                                         let list = self.lists.get_mut(&id)
                                             .expect("List couldn't find.");
                                         if index as usize >= list.len() {return Err(RuntimeError::IndexOutOfRange);}
-                                        let _ = std::mem::replace(&mut list[index as usize], rhs_value.clone());
-                                        Ok(rhs_value)
+                                        let _ = std::mem::replace(&mut list[index as usize], right_value.clone());
+                                        Ok(right_value)
                                     },
                                     (Value::Map(id), _) => {
                                         let key = lrhs_value.to_keyvalue();
@@ -725,8 +745,8 @@ impl Interpreter {
                                         }
                                         let map = self.maps.get_mut(&id)
                                             .expect("Map couldn't find.");
-                                        map.insert(key.unwrap(), rhs_value.clone());
-                                        Ok(rhs_value)
+                                        map.insert(key.unwrap(), right_value.clone());
+                                        Ok(right_value)
                                     }
                                     _ => Err(RuntimeError::TypeMismatch)
                                 }
@@ -735,17 +755,16 @@ impl Interpreter {
                         }
                         _ => Err(RuntimeError::AssignmentError)
                     },
-                    "." => match (lhs_value, *rhs.clone()) {                            
+                    "." => match (left_value, *rhs.clone()) {                            
                         (Value::Instance(_, id), Node::Identifier(member)) => {
-                            let ins = &self.instances[&id];
+                            let ins = self.get_instance(&id);
                             match ins.get(&member) {
                                 Some(val) => Ok(val.clone()),
                                 None => Err(RuntimeError::MemberAccessError) 
                             }
                         }
                         (Value::Module(id), Node::Identifier(member)) => {
-                            let module = self.modules.get(&id)
-                                .expect("Module couldn't find.");
+                            let module = self.get_module(&id);
                             let res = module.scope.resolve(&member);
                             if res.is_none() {
                                 Err(RuntimeError::MemberAccessError)
@@ -753,7 +772,7 @@ impl Interpreter {
                         },
                         _ => Err(RuntimeError::TypeMismatch)
                     }
-                    "[" => match (lhs_value, rhs_value.clone()) {
+                    "[" => match (left_value, right_value.clone()) {
                         (Value::List(id), Value::Int(index)) => {
                             let list = self.get_list(&id);
                             if index as usize >= list.len() {return Err(RuntimeError::IndexOutOfRange);}
@@ -765,7 +784,7 @@ impl Interpreter {
                             else { Ok(Value::String(res.unwrap().to_string())) }
                         },
                         (Value::Map(id), _) => {
-                            let key = rhs_value.to_keyvalue();
+                            let key = right_value.to_keyvalue();
                             if key.is_none() {
                                 return Err(RuntimeError::KeyError);
                             }
@@ -779,15 +798,9 @@ impl Interpreter {
                         }
                         _ => Err(RuntimeError::TypeMismatch)
                     }
-                    "|>" => match rhs_value {
-                        Value::Function(id) => {
-                            let function = self.get_function(&id).clone();
-                            function.call(id, self, &[lhs_value])
-                        },
-                        Value::NativeFunction(id) => {
-                            let nfunction = self.get_nfunction(&id).clone();
-                            nfunction.call(self, &[lhs_value])
-                        }
+                    "|>" => match right_value {
+                        Value::Function(id)       => self.get_function(&id).clone().apply(self, &[left_value]),
+                        Value::NativeFunction(id) => self.get_nfunction(&id).clone().apply(self, &[left_value]),
                         _ => Err(RuntimeError::TypeMismatch)
                     }
                     _ => unreachable!() 
@@ -810,85 +823,45 @@ impl Interpreter {
             },
             Node::Group(expr) => self.eval(*expr),
             Node::List(nodes) => {
-                let mut values: Vec<Value> = vec![];
-                for node in nodes {
-                    values.push(self.eval(node).expect("Expected Value"));
-                }
-                
-                let id = self.list_id;
-                self.lists.insert(id, values);
+                let values = self.collect_values(nodes)?;
+                self.lists.insert(self.list_id, values);
                 self.list_id += 1;
-                Ok(Value::List(id))
+                Ok(Value::List(self.list_id - 1))
             },
-            Node::Identifier(s) => { 
-                match self.current_scope.resolve(&s){
-                    Some(value) => Ok(value),
-                    None => {
-                        match self.globals.get(&s) {
-                            Some(val) => Ok(val.clone()),
-                            None => Err(RuntimeError::UndefinedVariable)
-                        }
-                    }
+            Node::Identifier(s) => match self.current_scope.resolve(&s) {
+                Some(value) => Ok(value),
+                None => match self.globals.get(&s) {
+                    Some(val) => Ok(val.clone()),
+                    None => Err(RuntimeError::UndefinedVariable)
                 }
             },
             Node::Unary { op, operand } => {
-                let operand_val = self.eval(*operand)?;
+                let operand_value = self.eval(*operand)?;
                 match op.as_str() {
-                    "+" => match operand_val {
-                        Value::Int(a) => Ok(Value::Int(a)),
+                    "+" => match operand_value {
+                        Value::Int(a)   => Ok(Value::Int(a)),
+                        Value::Float(a) => Ok(Value::Float(a)),
                         _ => Err(RuntimeError::TypeMismatch)
                     }
-                    "-" => match operand_val {
-                        Value::Int(a) => Ok(Value::Int(-a)),
+                    "-" => match operand_value {
+                        Value::Int(a)   => Ok(Value::Int(-a)),
+                        Value::Float(a) => Ok(Value::Float(-a)),
                         _ => Err(RuntimeError::TypeMismatch)
                     }
-                    "!" => match operand_val {
+                    "!" => match operand_value {
                         Value::Bool(a) => Ok(Value::Bool(!a)),
                         _ => Err(RuntimeError::TypeMismatch)
                     }
                     _ => unreachable!()
                 }
             },
-            Node::FunCall { fun, args } => {
-                let fun_val = self.eval(*fun.clone())?;
-                let node_args = args;
-                match fun_val {
-                    Value::NativeFunction(id) => {
-                        let nfunction = self.nfunctions.get(&id).unwrap().clone();
-                        let mut values = vec![];
-                        for arg in node_args {
-                            values.push(self.eval(arg)?);
-                        }
-                        nfunction.call(self, &values)
-                    }
-                    Value::Function(id) => {
-                        let function = self.get_function(&id).clone(); 
-                        //let values: Vec<_> = 
-                        //    node_args.iter().map(|arg| self.eval(*arg)).collect();
-                        let mut values = vec![];
-                        for arg in node_args {
-                            values.push(self.eval(arg)?);
-                        }
-                        function.call(id, self, &values)
-                    }
-                    Value::Type(typ) => {
-                        let class_id = match typ {
-                            Type::Custom(id) => id,
-                            _ => {unreachable!()}
-                        };
-                        let class = self.classes.get(&class_id).unwrap().clone();
-                        if class.members.len() != node_args.len() {
-                            return Err(RuntimeError::ArgNumMismatch);
-                        }
-                        let mut values = HashMap::new();
-                        for i in 0..class.members.len() {
-                            values.insert(class.members[i].clone(), self.eval(node_args[i].clone())?);
-                        }
-                        let id = self.ins_id;
-                        self.instances.insert(id, values);
-                        self.ins_id += 1;
-                        Ok(Value::Instance(class_id, id))
-                    },
+            Node::Application { fun, args } => {
+                let applicable_value = self.eval(*fun)?;
+                let values = self.collect_values(args)?;
+                match applicable_value {
+                    Value::NativeFunction(id) => self.get_nfunction(&id).clone().apply(self, &values),
+                    Value::Function(id)       => self.get_function(&id).clone().apply(self, &values),
+                    Value::Type(typ)          => typ.apply(self, &values),
                     _ => Err(RuntimeError::TypeMismatch)
                 }
             },

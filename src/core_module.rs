@@ -1,4 +1,4 @@
-use crate::interpreter::{ Interpreter, NativeFunction, RuntimeError, ClassDef };
+use crate::interpreter::{ Interpreter, NativeFunction, RuntimeError, ClassDef, Applicable };
 use crate::value::{ Value, Type };
 
 pub fn init(interpreter: &mut Interpreter) {
@@ -102,7 +102,7 @@ pub fn init(interpreter: &mut Interpreter) {
                     let list = interpreter.get_list(list_id).clone();
 
                     let res = list.iter().map(|element| {
-                        function.call(*func_id, interpreter, &[element.clone()])
+                        function.apply(interpreter, &[element.clone()])
                             .expect("Value Expected")
                     }).collect::<Vec<_>>();
 
@@ -114,7 +114,7 @@ pub fn init(interpreter: &mut Interpreter) {
                     let list = interpreter.get_list(list_id).clone();
 
                     let res = list.iter().map(|element| {
-                        function.call(interpreter, &[element.clone()])
+                        function.apply(interpreter, &[element.clone()])
                             .expect("Value Expected")
                     }).collect::<Vec<_>>();
 

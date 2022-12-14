@@ -40,9 +40,6 @@ pub enum Node {
         tru: Box<Node>,
         fals: Box<Node> 
     },
-    Else {
-        body: Box<Node>,
-    },
     While {
         expr: Box<Node>,
         body: Box<Node>,
@@ -62,7 +59,7 @@ pub enum Node {
         op: String,
         operand: Box<Node>
     },
-    FunCall {
+    Application {
         fun: Box<Node>,
         args: Vec<Node> 
     },
@@ -176,10 +173,6 @@ impl Node {
                 cond.print(indent + 1);
                 tru.print(indent + 1);
                 fals.print(indent + 1);
-            },
-            Node::Else { body } => {
-                println!("else");
-                body.print(indent + 1);
             },  
             Node::While { expr, body } => {
                 println!("while");
@@ -205,7 +198,7 @@ impl Node {
                 println!("{}", op);    
                 operand.print(indent + 1);
             },
-            Node::FunCall { fun, args } => {
+            Node::Application { fun, args } => {
                 println!("Fun Call");    
                 fun.print(indent + 1);
                 for arg in args {
