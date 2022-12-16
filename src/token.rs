@@ -17,7 +17,7 @@ pub enum TokenKind {
     TWODOT, DCOLON,
 
     // Keywords.
-    CLASS, LET, FUN, TRUE, FALSE, 
+    RECORD, LET, FUN, TRUE, FALSE, 
     NOTHING, IF, ELSE, FOR, BREAK, CONTINUE,
     WHILE, IMPORT, RETURN, MODULE, THEN, 
 

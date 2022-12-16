@@ -1,4 +1,4 @@
-use crate::interpreter::{ Interpreter, NativeFunction, RuntimeError, ClassDef, Applicable, State };
+use crate::interpreter::{ Interpreter, NativeFunction, RuntimeError, Record, State };
 use crate::value::{ Value, Type };
 
 pub fn init(interpreter: &mut Interpreter) {
@@ -39,7 +39,7 @@ pub fn init(interpreter: &mut Interpreter) {
         Value::Type(Type::Range)
     );
 
-    interpreter.add_type(ClassDef { 
+    interpreter.add_record(Record { 
         name: "Error".into(), members: vec!["value".into()] 
     });
 
@@ -48,7 +48,7 @@ pub fn init(interpreter: &mut Interpreter) {
         1,
         |interpreter, args| {
             match args[0].get_type() {
-                Type::Custom(id) => if "Error".to_string() == interpreter.get_classdef(&id).name {
+                Type::Custom(id) => if "Error".to_string() == interpreter.get_record(&id).name {
                     return Err(State::Error(RuntimeError::ReturnedError));
                 }
                 _ => {}
@@ -84,9 +84,7 @@ pub fn init(interpreter: &mut Interpreter) {
                     let list = interpreter.get_list(id);
                     Ok(Value::Int(list.len() as i32))
                 },
-                Value::String(string) => {
-                    Ok(Value::Int(string.len() as i32))
-                }
+                Value::String(string) => Ok(Value::Int(string.len() as i32)),
                 _ => Err(State::Error(RuntimeError::TypeMismatch))
             }
         } 
@@ -97,30 +95,17 @@ pub fn init(interpreter: &mut Interpreter) {
         2, 
         |interpreter, args| {
             match (&args[0], &args[1]) {
-                (Value::Function(func_id), Value::List(list_id)) => {
-                    let function = interpreter.get_function(func_id).clone();
+                (_, Value::List(list_id)) => {
                     let list = interpreter.get_list(list_id).clone();
 
                     let res = list.iter().map(|element| {
-                        function.apply(interpreter, &[element.clone()])
+                        args[0].apply(interpreter, &[element.clone()])
                             .expect("Value Expected")
                     }).collect::<Vec<_>>();
 
                     *interpreter.get_list_mut(list_id) = res;
                     Ok(Value::None)
                 },
-                (Value::NativeFunction(func_id), Value::List(list_id)) => {
-                    let function = interpreter.get_nfunction(func_id).clone();
-                    let list = interpreter.get_list(list_id).clone();
-
-                    let res = list.iter().map(|element| {
-                        function.apply(interpreter, &[element.clone()])
-                            .expect("Value Expected")
-                    }).collect::<Vec<_>>();
-
-                    *interpreter.get_list_mut(list_id) = res;
-                    Ok(Value::None)
-                }
                 _ => Err(State::Error(RuntimeError::TypeMismatch))
             }
         } 

@@ -395,8 +395,8 @@ impl Parser {
     }
     
     // todo
-    fn class_declaration(&mut self) -> Result<Node, ParseError> {
-        self.consume(CLASS)?;
+    fn record_declaration(&mut self) -> Result<Node, ParseError> {
+        self.consume(RECORD)?;
         let name = self.consume(IDENTIFIER)?.text;
         self.consume(LPAREN)?;
         let mut members = vec![];
@@ -470,7 +470,7 @@ impl Parser {
             RETURN   => self.return_statement()?,
             BREAK    => self.break_statement()?,
             CONTINUE => self.continue_statement()?,
-            CLASS    => self.class_declaration()?,
+            RECORD    => self.record_declaration()?,
             FUN      => self.fun_declaration()?,
             IF       => self.if_statement()?,
             WHILE    => self.while_statement()?,

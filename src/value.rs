@@ -34,7 +34,7 @@ impl Type {
             Type::Module => "Module".to_string(),
             Type::Range => "Range".to_string(),
             Type::Map => "Map".to_string(),
-            Type::Custom(cid) => interpreter.get_classdef(&cid).name.clone(),
+            Type::Custom(cid) => interpreter.get_record(&cid).name.clone(),
             
             Type::Unit => "Unit".to_string(),
             Type::Void => "Void".to_string(),
@@ -129,12 +129,12 @@ impl Value {
             },
             Value::Module(id) => format!("<module: {}>", interpreter.get_module(id).name),
             Value::Instance(_, id) => {
-                let mut s = String::from("{");
+                let mut s = String::from("(");
                 let mut first = true;
                 for (key ,value) in interpreter.get_instance(id).clone() {
                     if !first { s += ", " } else { first = false; }
                     s += &format!("{}: {}", key, value.get_string(interpreter));
-                } s += "}"; s
+                } s += ")"; s
             }            
         }
     }

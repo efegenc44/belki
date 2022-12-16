@@ -1,7 +1,7 @@
 module Song {
     let song_in_french = "la chanson"
     
-    class song (name, artist, genre)
+    record song (name, artist, genre)
 
     fun set_name(song, name')
         song.name = name' 

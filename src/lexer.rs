@@ -71,7 +71,7 @@ impl Lexer {
         let text = &self.source[self.start..self.current];
     
         let token_kind = match text {
-            "class"   => CLASS,
+            "record"  => RECORD,
             "let"     => LET,
             "fun"     => FUN,
             "true"    => TRUE,
