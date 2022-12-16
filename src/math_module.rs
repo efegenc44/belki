@@ -1,4 +1,4 @@
-use crate::interpreter::{ Interpreter, Scope, NativeFunction, RuntimeError };
+use crate::interpreter::{ Interpreter, Scope, NativeFunction, RuntimeError, State };
 use crate::value::Value;
 
 pub fn init(interpreter: &mut Interpreter) {
@@ -12,7 +12,7 @@ pub fn init(interpreter: &mut Interpreter) {
                 (Value::Int(base), Value::Int(power)) => {
                     return Ok(Value::Int(base.pow(power as u32)));
                 },
-                _ => Err(RuntimeError::TypeMismatch)
+                _ => Err(State::Error(RuntimeError::TypeMismatch))
             }
         } 
     ));
@@ -28,7 +28,7 @@ pub fn init(interpreter: &mut Interpreter) {
                 Value::Float(f) => {
                     return Ok(Value::Float(f32::sqrt(f)));
                 },
-                _ => Err(RuntimeError::TypeMismatch)
+                _ => Err(State::Error(RuntimeError::TypeMismatch))
             }
         } 
     ));

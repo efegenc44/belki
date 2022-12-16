@@ -6,7 +6,6 @@ use TokenKind::*;
 #[derive(Debug)]
 pub enum ParseError {
     UnexpectedToken,
-    ReturnOutsideFunction,
     IllDefinedAST
 }
 
@@ -55,12 +54,11 @@ pub enum ParseError {
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
-    inside_function: usize
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Parser {
-        Parser { tokens, current: 0, inside_function: 0 }
+        Parser { tokens, current: 0 }
     }
 
     fn next(&mut self) -> Token {
@@ -131,16 +129,16 @@ impl Parser {
                         let nt = self.next();
                         text += &nt.text; 
                     }
-                    return Ok(Node::Float(text.parse::<f32>().unwrap()))
+                    return Ok(Node::FloatLiteral(text.parse::<f32>().unwrap()))
                 }
-                Node::Integer(t.text.parse::<i32>().unwrap())
+                Node::IntegerLiteral(t.text.parse::<i32>().unwrap())
             },
-            STRING     => Node::String(t.text.to_string()),
+            STRING     => Node::StringLiteral(t.text.to_string()),
             IDENTIFIER => Node::Identifier(t.text),
             TRUE       => Node::True,
             FALSE      => Node::False,
             NOTHING    => Node::Nothing,
-            LSQUARE    => Node::List(self.expression_list(RSQUARE)?),
+            LSQUARE    => Node::ListLiteral(self.expression_list(RSQUARE)?),
             LPAREN     => {
                 let expr = self.expression()?;
                 self.consume(RPAREN)?;
@@ -148,7 +146,7 @@ impl Parser {
             },
             PLUS | MINUS | BANG => {
                 let operand = self.product()?;
-                Node::Unary {
+                Node::UnaryExpression {
                     op: t.text,
                     operand: Box::new(operand)
                 }
@@ -167,11 +165,11 @@ impl Parser {
                 }
                 let body;
                 if self.peek().kind == LCURLY {
-                    body = Box::new(self.fun_block()?);
+                    body = Box::new(self.block()?);
                 } else {
                     body = Box::new(self.expression()?);
                 }
-                Node::Fun { name: "".into(), args, body }
+                Node::FunctionDeclaration { name: "".into(), args, body }
             },
             IF => {
                 let cond = Box::new(self.expression()?);
@@ -179,7 +177,7 @@ impl Parser {
                 let tru = Box::new(self.expression()?);
                 self.consume(ELSE)?;
                 let fals = Box::new(self.expression()?);
-                Node::IfExpr { cond, tru, fals }
+                Node::IfExpression { cond, tru, fals }
             }
             HASH => {
                 let mut elements = vec![];
@@ -197,7 +195,7 @@ impl Parser {
                         elements.push((key, value));                    
                     }
                 }
-                Node::MapLit(elements)
+                Node::MapLiteral(elements)
             }
             
             _ => {
@@ -214,7 +212,7 @@ impl Parser {
                     self.consume(LSQUARE)?;
                     let rhs = self.expression()?;
                     self.consume(RSQUARE)?;
-                    node = Node::Binary { 
+                    node = Node::BinaryExpression { 
                         op: ntnl.text, 
                         lhs: Box::new(node),
                         rhs: Box::new(rhs), 
@@ -238,7 +236,7 @@ impl Parser {
                         self.consume(IDENTIFIER)?.text
                     );
 
-                    node = Node::Binary { 
+                    node = Node::BinaryExpression { 
                         op: nt.text, 
                         lhs: Box::new(node),
                         rhs: Box::new(rhs), 
@@ -256,7 +254,7 @@ impl Parser {
             let t = self.peek().clone();
             self.consume(t.kind)?;
             let rhs = self.product()?;
-            lhs = Node::Binary {
+            lhs = Node::BinaryExpression {
                 op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
             };
         } 
@@ -269,7 +267,7 @@ impl Parser {
             let t = self.peek().clone();
             self.consume(t.kind)?;
             let rhs = self.term()?;
-            lhs = Node::Binary {
+            lhs = Node::BinaryExpression {
                 op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
             };
         }
@@ -282,7 +280,7 @@ impl Parser {
             let t = self.peek().clone();
             self.consume(t.kind)?;
             let mut rhs = self.arithmetic()?;
-            let mut a = Node::Binary { 
+            let mut a = Node::BinaryExpression { 
                 op: t.text, rhs: Box::new(rhs.clone()), lhs: Box::new(lhs.clone()) 
             };
             while let DEQUAL | BANGEQUAL | GREATER | GREATEREQUAL | LESS | LESSEQUAL = self.peek().kind {
@@ -290,10 +288,10 @@ impl Parser {
                 lhs = rhs.clone();
                 self.consume(t.kind)?;
                 rhs = self.arithmetic()?;
-                let b = Node::Binary { 
+                let b = Node::BinaryExpression { 
                     op: t.text, rhs: Box::new(rhs.clone()), lhs: Box::new(lhs.clone()) 
                 };
-                a = Node::Binary { op: "&&".into(), lhs: Box::new(a), rhs: Box::new(b) }; 
+                a = Node::BinaryExpression { op: "&&".into(), lhs: Box::new(a), rhs: Box::new(b) }; 
             }
             Ok(a)
         } else {
@@ -301,7 +299,7 @@ impl Parser {
                 let t = self.peek().clone();
                 self.consume(t.kind)?;
                 let rhs = self.arithmetic()?;
-                lhs = Node::Binary {
+                lhs = Node::BinaryExpression {
                     op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
                 };
             } Ok(lhs)
@@ -314,7 +312,7 @@ impl Parser {
             let t = self.peek().clone();
             self.consume(t.kind)?;
             let rhs = self.relation()?;
-            lhs = Node::Binary {
+            lhs = Node::BinaryExpression {
                 op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
             };
         }
@@ -327,7 +325,7 @@ impl Parser {
             let t = self.peek().clone();
             self.consume(t.kind)?;
             let rhs = self.logic()?;
-            lhs = Node::Binary {
+            lhs = Node::BinaryExpression {
                 op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
             };
         }
@@ -340,12 +338,12 @@ impl Parser {
             EQUAL => {
                 self.consume(EQUAL)?;
                 let rhs = self.expression()?;
-                Ok(Node::Binary { op: "=".into(), lhs: Box::new(lhs), rhs: Box::new(rhs) })
+                Ok(Node::BinaryExpression { op: "=".into(), lhs: Box::new(lhs), rhs: Box::new(rhs) })
             },
             TWODOT => {
                 self.consume(TWODOT).unwrap();
                 let rhs = self.logic_or()?;
-                Ok(Node::Binary { 
+                Ok(Node::BinaryExpression { 
                     op: "..".into(), lhs: Box::new(lhs), rhs: Box::new(rhs) 
                 })
             }
@@ -355,12 +353,12 @@ impl Parser {
 
     fn while_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(WHILE)?;
-        Ok(Node::While { expr: Box::new(self.expression()?), body: Box::new(self.statement_wo_decs()?) })
+        Ok(Node::WhileStatement { expr: Box::new(self.expression()?), body: Box::new(self.statement_wo_decs()?) })
     }
 
     fn if_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(IF)?;
-        Ok(Node::If { 
+        Ok(Node::IfStatement { 
             expr: Box::new(self.expression()?), 
             body: Box::new(self.statement_wo_decs()?), 
             els: if self.peek().kind == ELSE { Box::new(self.els()?) } else { Box::new(Node::None) } 
@@ -389,11 +387,11 @@ impl Parser {
         }
         let body;
         if self.peek().kind == LCURLY {
-            body = Box::new(self.fun_block()?);
+            body = Box::new(self.block()?);
         } else {
             body = Box::new(self.expression()?);
         }
-        Ok(Node::Fun { name, args, body })
+        Ok(Node::FunctionDeclaration { name, args, body })
     }
     
     // todo
@@ -409,13 +407,10 @@ impl Parser {
                 members.push(self.consume(IDENTIFIER)?.text);
             }
         }
-        Ok(Node::Class { name, members })
+        Ok(Node::RecordDeclaration { name, members })
     }
 
     fn return_statement(&mut self) -> Result<Node, ParseError> {
-        if self.inside_function == 0 {
-            return Err(ParseError::ReturnOutsideFunction);
-        }
         self.consume(RETURN)?;
         Ok(Node::Return(Box::new(self.expression()?)))
     }
@@ -425,7 +420,7 @@ impl Parser {
         let name = self.consume(IDENTIFIER)?.text;
         self.consume(EQUAL)?;
         let expr = Box::new(self.expression()?);
-        Ok(Node::Let { name, expr })  
+        Ok(Node::LetStatement { name, expr })  
     }
 
     fn import_statement(&mut self) -> Result<Node, ParseError> {
@@ -449,7 +444,7 @@ impl Parser {
         self.consume(COLON)?;
         let iter = Box::new(self.expression()?);
         let body = Box::new(self.statement_wo_decs()?);
-        Ok(Node::For { var, iter, body })
+        Ok(Node::ForStatement { var, iter, body })
     }
 
     fn block(&mut self) -> Result<Node, ParseError> {
@@ -461,31 +456,11 @@ impl Parser {
         Ok(Node::Block(statements))
     }
 
-    fn block2(&mut self) -> Result<Node, ParseError> {
-        self.consume(LCURLY)?;
-        let mut statements: Vec<Node> = vec![];
-        while !self.expect(RCURLY) {
-            statements.push(self.statement()?);
-        }
-        Ok(Node::Block2(statements))
-    }
-
-    fn fun_block(&mut self) -> Result<Node, ParseError> {
-        self.inside_function += 1;
-        self.consume(LCURLY)?;
-        let mut statements: Vec<Node> = vec![];
-        while !self.expect(RCURLY) {
-            statements.push(self.statement()?);
-        }
-        self.inside_function -= 1;
-        Ok(Node::FunBlock(statements))
-    }
-
     fn module(&mut self) -> Result<Node, ParseError> {
         self.consume(MODULE)?;
         let name = self.consume(IDENTIFIER)?.text;
-        let block = Box::new(self.block2()?);
-        Ok(Node::Module(name, block))
+        let body = Box::new(self.block()?);
+        Ok(Node::ModuleDeclaration { name, body })
     }
 
     fn statement(&mut self) -> Result<Node, ParseError> {

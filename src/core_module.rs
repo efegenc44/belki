@@ -1,4 +1,4 @@
-use crate::interpreter::{ Interpreter, NativeFunction, RuntimeError, ClassDef, Applicable };
+use crate::interpreter::{ Interpreter, NativeFunction, RuntimeError, ClassDef, Applicable, State };
 use crate::value::{ Value, Type };
 
 pub fn init(interpreter: &mut Interpreter) {
@@ -49,7 +49,7 @@ pub fn init(interpreter: &mut Interpreter) {
         |interpreter, args| {
             match args[0].get_type() {
                 Type::Custom(id) => if "Error".to_string() == interpreter.get_classdef(&id).name {
-                    return Err(RuntimeError::ReturnedError);
+                    return Err(State::Error(RuntimeError::ReturnedError));
                 }
                 _ => {}
             }
@@ -87,7 +87,7 @@ pub fn init(interpreter: &mut Interpreter) {
                 Value::String(string) => {
                     Ok(Value::Int(string.len() as i32))
                 }
-                _ => Err(RuntimeError::TypeMismatch)
+                _ => Err(State::Error(RuntimeError::TypeMismatch))
             }
         } 
     ));
@@ -121,7 +121,7 @@ pub fn init(interpreter: &mut Interpreter) {
                     *interpreter.get_list_mut(list_id) = res;
                     Ok(Value::None)
                 }
-                _ => Err(RuntimeError::TypeMismatch)
+                _ => Err(State::Error(RuntimeError::TypeMismatch))
             }
         } 
     ));
@@ -132,9 +132,9 @@ pub fn init(interpreter: &mut Interpreter) {
         |_, args| {
             match args[0] {
                 Value::Bool(t) =>
-                    if !t { Err(RuntimeError::AssertionFailure) }
+                    if !t { Err(State::Error(RuntimeError::AssertionFailure)) }
                     else { Ok(Value::None) },
-                _ => Err(RuntimeError::TypeMismatch)
+                _ => Err(State::Error(RuntimeError::TypeMismatch))
             } 
         } 
     ));
@@ -148,7 +148,7 @@ pub fn init(interpreter: &mut Interpreter) {
                     interpreter.get_list_mut(&idx).push(args[1].clone());
                     Ok(Value::None)
                 }
-                _ => Err(RuntimeError::TypeMismatch)
+                _ => Err(State::Error(RuntimeError::TypeMismatch))
             } 
         } 
     ));
@@ -162,7 +162,7 @@ pub fn init(interpreter: &mut Interpreter) {
                     interpreter.get_list_mut(&idx).pop();
                     Ok(Value::None)
                 }
-                _ => Err(RuntimeError::TypeMismatch)
+                _ => Err(State::Error(RuntimeError::TypeMismatch))
             } 
         } 
     ));
@@ -180,7 +180,7 @@ pub fn init(interpreter: &mut Interpreter) {
                     string.clear();
                     Ok(Value::None)
                 }
-                _ => Err(RuntimeError::TypeMismatch)
+                _ => Err(State::Error(RuntimeError::TypeMismatch))
             } 
         } 
     ));
@@ -197,11 +197,11 @@ pub fn init(interpreter: &mut Interpreter) {
                 Value::Map(idx) => {
                     let key = match args[1].to_keyvalue() {
                         Some(_) => args[1].to_keyvalue().unwrap(),
-                        None => {return Err(RuntimeError::KeyError);}
+                        None => {return Err(State::Error(RuntimeError::KeyError));}
                     };
                     Ok(Value::Bool(interpreter.get_map(&idx).contains_key(&key)))
                 }
-                _ => Err(RuntimeError::TypeMismatch)
+                _ => Err(State::Error(RuntimeError::TypeMismatch))
             } 
         } 
     ));

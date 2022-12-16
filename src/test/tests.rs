@@ -113,4 +113,10 @@ mod tests {
         let res = crate::from_file(String::from("src/test/chained_relation.txt"));
         assert!(res != None);
     }
+
+    #[test]
+    fn return_for() {
+        let res = crate::from_file(String::from("src/test/return_for.txt"));
+        assert!(res != None);
+    }
 }

@@ -1,0 +1,7 @@
+fun foo() {
+    for i : 1..4 
+        if i == 2
+            return i
+}
+
+assert(foo() == 2)
