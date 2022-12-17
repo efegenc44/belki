@@ -6,6 +6,7 @@ use TokenKind::*;
 pub enum LexError {
     UnexpectedCharacter,
     UnknownCharacter,
+    UnknownEscapeSequence
 }
 
 pub struct Lexer {
@@ -94,11 +95,39 @@ impl Lexer {
     }
 
     fn string(&mut self) -> Result<Token, LexError> {
+        let mut value = String::new();
         while !(self.peek() == '\n' 
             || self.peek() == '\0'
             || self.peek() == '"') 
         {
-            self.next();
+            if self.expect('\\') {
+                if self.expect('n') {
+                    value += &'\n'.to_string();
+                }
+                else if self.expect('\\') {
+                    value += &'\\'.to_string();
+                }
+                else if self.expect('0') {
+                    value += &'\0'.to_string();
+                }
+                else if self.expect('t') {
+                    value += &'\t'.to_string();
+                }
+                else if self.expect('r') {
+                    value += &'\r'.to_string();
+                }
+                else if self.expect('"') {
+                    value += &'\"'.to_string();
+                }
+                else if self.expect('r') {
+                    value += &'\r'.to_string();
+                }
+                else {
+                    return Err(LexError::UnknownEscapeSequence);
+                }
+                continue;
+            }
+            value += &self.next().to_string();
         }
         // Closing '"'.
         if !self.expect('"') {
@@ -107,7 +136,7 @@ impl Lexer {
 
         Ok(Token::new(
             STRING, 
-            self.source[self.start+1..self.current-1].to_string(),
+            value,
             self.get_loc()
         ))
     }
