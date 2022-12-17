@@ -139,9 +139,7 @@ impl Value {
                     Ok(v) => Ok(v),
                     Err(s) => match s {
                         State::Return(v) => Ok(v),
-                        State::Error(err) => Err(State::Error(err)),
-                        State::Continue => Err(State::Error(RuntimeError::IllegalContinue)),
-                        State::Break => Err(State::Error(RuntimeError::IllegalBreak))
+                        _ => Err(s)
                     }
                 };
                 
@@ -174,6 +172,27 @@ impl Value {
                 Ok(Value::Instance(*class_id, id))
             }
             _ => Err(State::Error(RuntimeError::TypeMismatch))
+        }
+    }
+
+    fn equality(self, rhs_value: Value, interpreter: &mut Interpreter) -> EvalResult {
+        match (self.clone(), rhs_value.clone()) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a == b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a == b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a == b as f32)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 == b)),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
+            (Value::List(ida), Value::List(idb)) => Ok(Value::Bool(interpreter.get_list(&ida) == interpreter.get_list(&idb))),
+            (Value::Map(ida), Value::Map(idb)) => Ok(Value::Bool(interpreter.get_map(&ida) == interpreter.get_map(&idb))),
+            (Value::Type(type1), Value::Type(type2)) => Ok(Value::Bool(type1 == type2)),
+            (Value::Range(a, b), Value::Range(c, d)) => Ok(Value::Bool(a == c && b == d)),
+            _ => {
+                if std::mem::discriminant(&self) != 
+                    std::mem::discriminant(&rhs_value) {
+                        return Ok(Value::Bool(false));
+                    }
+                Err(State::Error(RuntimeError::TypeMismatch))
+            }
         }
     }
 }
@@ -247,12 +266,9 @@ impl Interpreter {
         }
     }
 
+    // Immutable getters
     pub fn get_list(&self, id: &usize) -> &List {
         self.lists.get(id).expect("No list with this id.")
-    }
-
-    pub fn get_list_mut(&mut self, id: &usize) -> &mut List {
-        self.lists.get_mut(id).expect("No list with this id.")
     }
 
     pub fn get_function(&self, id: &usize) -> &Function {
@@ -277,6 +293,23 @@ impl Interpreter {
 
     pub fn get_map(&self, id: &usize) -> &Map {
         self.maps.get(id).expect("No Map with this id.")
+    }
+    
+    // Mutable getters
+    pub fn get_list_mut(&mut self, id: &usize) -> &mut List {
+        self.lists.get_mut(id).expect("No list with this id.")
+    }
+
+    pub fn get_map_mut(&mut self, id: &usize) -> &mut Map {
+        self.maps.get_mut(id).expect("No map with this id.")
+    }
+
+    pub fn get_module_mut(&mut self, id: &usize) -> &mut Module {
+        self.modules.get_mut(id).expect("No list with this id.")
+    }
+
+    pub fn get_instance_mut(&mut self, id: &usize) -> &mut Environment {
+        self.instances.get_mut(id).expect("No list with this id.")
     }
 
     pub fn add_native_function_to_module(&mut self, module_name: String, func: NativeFunction) {
@@ -335,29 +368,24 @@ impl Interpreter {
         );
     }
 
+    pub fn add_list(&mut self, list: List) -> Value {
+        let id = self.list_id;
+        self.lists.insert(id, list.clone());
+        self.list_id += 1;
+        return Value::List(id);
+    }
+
+    pub fn add_map(&mut self, map: Map) -> Value {
+        let id = self.map_id;
+        self.maps.insert(id, map.clone());
+        self.map_id += 1;
+        return Value::Map(id);
+    }
+
     pub fn add_global_variable(&mut self, name: String, value: Value) {
         self.globals.insert(name, value);
     }
-
-    fn equality(&mut self, lhs_value: Value, rhs_value: Value) -> EvalResult {
-        match (lhs_value.clone(), rhs_value.clone()) {
-            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a == b)),
-            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a == b)),
-            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a == b as f32)),
-            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 == b)),
-            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
-            (Value::List(ida), Value::List(idb)) => Ok(Value::Bool(self.get_list(&ida) == self.get_list(&idb))),
-            (Value::Type(type1), Value::Type(type2)) => Ok(Value::Bool(type1 == type2)),
-            _ => {
-                if std::mem::discriminant(&lhs_value) != 
-                    std::mem::discriminant(&rhs_value) {
-                        return Ok(Value::Bool(false));
-                    }
-                Err(State::Error(RuntimeError::TypeMismatch))
-            }
-        }
-    }
-
+    
     fn collect_values(&mut self, nodes: Vec<Node>) -> Result<Vec<Value>, State> {
         let mut values = vec![];
         for node in nodes { 
@@ -367,7 +395,7 @@ impl Interpreter {
 
     pub fn eval(&mut self, node: Node) -> EvalResult {
         match node {
-            Node::Program(statements) => {
+            Node::Module(statements) => {
                 for statement in statements {
                     match self.eval(statement) {
                         Ok(v) => if self.repl && v != Value::None {
@@ -375,26 +403,28 @@ impl Interpreter {
                         },
                         Err(err) => match err {
                             State::Return(_) => return Err(State::Error(RuntimeError::IllegalReturn)),
-                            _ => return Err(err)
+                            State::Continue => return Err(State::Error(RuntimeError::IllegalContinue)),
+                            State::Break => return Err(State::Error(RuntimeError::IllegalBreak)),
+                            State::Error(_) => return Err(err)
                         }
                     }
                 } 
                 Ok(Value::None)
             },
             Node::Block(statements) => {
+                self.enter_scope();
                 for statement in statements {
                     self.eval(statement)?;
                 }
+                self.exit_scope();
                 Ok(Value::None)
             },
             Node::ModuleDeclaration { name, body } => {
                 self.enter_scope();
                 let up = self.current_scope.upper.clone();
-                self.current_scope.upper = None;
-                self.enter_scope();
+                self.current_scope.upper = Some(Box::new(Scope::new()));
                 self.eval(*body)?;
                 let scope = self.current_scope.clone();
-                self.exit_scope();
                 self.current_scope.upper = up;
                 self.exit_scope();
                 
@@ -448,10 +478,7 @@ impl Interpreter {
                         None => return Err(State::Error(RuntimeError::HashError)),
                     }
                 }
-                let id = self.map_id;
-                self.map_id += 1;
-                self.maps.insert(id, hmap);
-                Ok(Value::Map(id))
+                Ok(self.add_map(hmap))
             }
             Node::ForStatement { var, iter, body } => {
                 match self.eval(*iter)? {
@@ -465,11 +492,9 @@ impl Interpreter {
                                 Err(s) => match s {
                                     State::Continue => continue,
                                     State::Break => break,
-                                    State::Return(v) => return Err(State::Return(v)),
-                                    State::Error(err) => return Err(State::Error(err))
+                                    _ => return Err(s)
                                 }
                             };
-
                         }
                         self.exit_scope();
                     },
@@ -482,8 +507,7 @@ impl Interpreter {
                                 Err(s) => match s {
                                     State::Continue => continue,
                                     State::Break => break,
-                                    State::Return(v) => return Err(State::Return(v)),
-                                    State::Error(err) => return Err(State::Error(err))
+                                    _ => return Err(s)
                                 }
                             };
                         }
@@ -498,8 +522,7 @@ impl Interpreter {
                                 Err(s) => match s {
                                     State::Continue => continue,
                                     State::Break => break,
-                                    State::Return(v) => return Err(State::Return(v)),
-                                    State::Error(err) => return Err(State::Error(err))
+                                    _ => return Err(s)
                                 }
                             };
                         }
@@ -567,14 +590,78 @@ impl Interpreter {
                 }
             },
             Node::BinaryExpression { op, lhs, rhs } => {
-                let mut left_value = Value::None;
-                if op.as_str() != "=" {
-                    left_value = self.eval(*lhs.clone())?;
+                if op.as_str() == "=" {
+                    let right_value = self.eval(*rhs)?;
+                    return match *lhs {
+                        Node::Identifier(var) => {
+                            self.current_scope.assign(&var, &right_value)?;
+                            Ok(right_value)
+                        },
+                        Node::BinaryExpression { op, lhs, rhs } => {
+                            let llhs_value = self.eval(*lhs)?;
+                            if op.as_str() == "." {
+                                return match (llhs_value, *rhs) {
+                                    (Value::Instance(_, id), Node::Identifier(member)) => {
+                                        let ins = self.get_instance_mut(&id);
+                                        let attr = ins.get_mut(&member).unwrap();
+                                        *attr = right_value.clone();
+                                        Ok(right_value)
+                                    }
+                                    (Value::Module(id), Node::Identifier(member)) => {
+                                        let module = self.get_module_mut(&id);
+                                        module.scope.assign(&member, &right_value)?;
+                                        Ok(right_value)
+                                    },
+                                    _ => Err(State::Error(RuntimeError::MemberAccessError))
+                                }                            }
+                            let lrhs_value = self.eval(*rhs)?;
+                            if op.as_str() == "[" {
+                                return match (llhs_value, lrhs_value.clone()) {
+                                    (Value::List(id), Value::Int(index)) => {
+                                        let list = self.get_list_mut(&id);
+                                        if index as usize >= list.len() {return Err(State::Error(RuntimeError::IndexOutOfRange));}
+                                        let _ = std::mem::replace(&mut list[index as usize], right_value.clone());
+                                        Ok(right_value)
+                                    },
+                                    (Value::Map(id), _) => {
+                                        let key = lrhs_value.to_keyvalue();
+                                        if key.is_none() {
+                                            return Err(State::Error(RuntimeError::KeyError));
+                                        }
+                                        let map = self.get_map_mut(&id);
+                                        map.insert(key.unwrap(), right_value.clone());
+                                        Ok(right_value)
+                                    }
+                                    _ => Err(State::Error(RuntimeError::TypeMismatch))
+                                }
+                            }
+                            Err(State::Error(RuntimeError::AssignmentError))
+                        }
+                        _ => Err(State::Error(RuntimeError::AssignmentError))
+                    }
                 }
-                let mut right_value = Value::None;
-                if op.as_str() != "." {
-                    right_value = self.eval(*rhs.clone())?;
+                if op.as_str() == "." {
+                    let left_value = self.eval(*lhs)?;
+                    return match (left_value, *rhs.clone()) {                            
+                        (Value::Instance(_, id), Node::Identifier(member)) => {
+                            let ins = self.get_instance(&id);
+                            match ins.get(&member) {
+                                Some(val) => Ok(val.clone()),
+                                None => Err(State::Error(RuntimeError::MemberAccessError)) 
+                            }
+                        }
+                        (Value::Module(id), Node::Identifier(member)) => {
+                            let module = self.get_module(&id);
+                            let res = module.scope.resolve(&member);
+                            if res.is_none() {
+                                Err(State::Error(RuntimeError::MemberAccessError))
+                            } else { Ok(res.unwrap()) }
+                        },
+                        _ => Err(State::Error(RuntimeError::TypeMismatch))
+                    }
                 }
+                let left_value = self.eval(*lhs)?;
+                let right_value = self.eval(*rhs)?;
                 match op.as_str() {
                     "+" => match (left_value, right_value) {
                         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
@@ -645,10 +732,10 @@ impl Interpreter {
                         (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(a as f32 > b)),
                         _ => Err(State::Error(RuntimeError::TypeMismatch))
                     },
-                    "!=" => if let Value::Bool(b) = self.equality(left_value, right_value)? {
+                    "!=" => if let Value::Bool(b) = left_value.equality(right_value, self)? {
                             return Ok(Value::Bool(!b));
                         } else { unreachable!() }
-                    "==" => self.equality(left_value, right_value),
+                    "==" => left_value.equality(right_value, self),
                     "||" => match (left_value, right_value) {
                         (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a || b)),
                         _ => Err(State::Error(RuntimeError::TypeMismatch))
@@ -668,76 +755,6 @@ impl Interpreter {
                         (_, Value::Type(typ)) => Ok(Value::Bool(left_value.get_type() == typ)),
                         _ => Err(State::Error(RuntimeError::TypeMismatch))
                     },
-                    "=" => match *lhs {
-                        Node::Identifier(var) => {
-                            self.current_scope.assign(&var, &right_value)?;
-                            Ok(right_value)
-                        },
-                        Node::BinaryExpression { op, lhs, rhs } => {
-                            let llhs_value = self.eval(*lhs.clone())?;
-                            let mut lrhs_value = Value::None;
-                            if op.as_str() != "." {
-                                lrhs_value = self.eval(*rhs.clone())?;
-                            }
-                            match op.as_str() {
-                                "." => match (llhs_value, *rhs) {
-                                    (Value::Instance(_, id), Node::Identifier(member)) => {
-                                        let ins = self.instances.get_mut(&id)
-                                            .expect("Instance couldn't find.");
-                                        let attr = ins.get_mut(&member).unwrap();
-                                        *attr = right_value.clone();
-                                        Ok(right_value)
-                                    }
-                                    (Value::Module(id), Node::Identifier(member)) => {
-                                        let module = self.modules.get_mut(&id)
-                                            .expect("Module couldn't find.");
-                                        module.scope.assign(&member, &right_value)?;
-                                        Ok(right_value)
-                                    },
-                                    _ => Err(State::Error(RuntimeError::MemberAccessError))
-                                }
-                                "[" => match (llhs_value, lrhs_value.clone()) {
-                                    (Value::List(id), Value::Int(index)) => {
-                                        let list = self.lists.get_mut(&id)
-                                            .expect("List couldn't find.");
-                                        if index as usize >= list.len() {return Err(State::Error(RuntimeError::IndexOutOfRange));}
-                                        let _ = std::mem::replace(&mut list[index as usize], right_value.clone());
-                                        Ok(right_value)
-                                    },
-                                    (Value::Map(id), _) => {
-                                        let key = lrhs_value.to_keyvalue();
-                                        if key.is_none() {
-                                            return Err(State::Error(RuntimeError::KeyError));
-                                        }
-                                        let map = self.maps.get_mut(&id)
-                                            .expect("Map couldn't find.");
-                                        map.insert(key.unwrap(), right_value.clone());
-                                        Ok(right_value)
-                                    }
-                                    _ => Err(State::Error(RuntimeError::TypeMismatch))
-                                }
-                                _ => Err(State::Error(RuntimeError::AssignmentError))
-                            }
-                        }
-                        _ => Err(State::Error(RuntimeError::AssignmentError))
-                    },
-                    "." => match (left_value, *rhs.clone()) {                            
-                        (Value::Instance(_, id), Node::Identifier(member)) => {
-                            let ins = self.get_instance(&id);
-                            match ins.get(&member) {
-                                Some(val) => Ok(val.clone()),
-                                None => Err(State::Error(RuntimeError::MemberAccessError)) 
-                            }
-                        }
-                        (Value::Module(id), Node::Identifier(member)) => {
-                            let module = self.get_module(&id);
-                            let res = module.scope.resolve(&member);
-                            if res.is_none() {
-                                Err(State::Error(RuntimeError::MemberAccessError))
-                            } else { Ok(res.unwrap()) }
-                        },
-                        _ => Err(State::Error(RuntimeError::TypeMismatch))
-                    }
                     "[" => match (left_value, right_value.clone()) {
                         (Value::List(id), Value::Int(index)) => {
                             let list = self.get_list(&id);
@@ -780,9 +797,7 @@ impl Interpreter {
             Node::Group(expr)       => self.eval(*expr),
             Node::ListLiteral(nodes) => {
                 let values = self.collect_values(nodes)?;
-                self.lists.insert(self.list_id, values);
-                self.list_id += 1;
-                Ok(Value::List(self.list_id - 1))
+                Ok(self.add_list(values))
             },
             Node::Identifier(s) => match self.current_scope.resolve(&s) {
                 Some(value) => Ok(value),

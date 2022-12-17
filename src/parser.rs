@@ -274,12 +274,26 @@ impl Parser {
         Ok(lhs)
     }
 
+    pub fn  range(&mut self) -> Result<Node, ParseError> {
+        let lhs = self.arithmetic()?;
+        match self.peek().kind {
+            TWODOT => {
+                self.consume(TWODOT).unwrap();
+                let rhs = self.arithmetic()?;
+                Ok(Node::BinaryExpression { 
+                    op: "..".into(), lhs: Box::new(lhs), rhs: Box::new(rhs) 
+                })
+            },
+            _ => Ok(lhs)
+        }
+    }
+
     fn relation(&mut self) -> Result<Node, ParseError> {
-        let mut lhs = self.arithmetic()?;
+        let mut lhs = self.range()?;
         if let DEQUAL | BANGEQUAL | GREATER | GREATEREQUAL | LESS | LESSEQUAL = self.peek().kind {
             let t = self.peek().clone();
             self.consume(t.kind)?;
-            let mut rhs = self.arithmetic()?;
+            let mut rhs = self.range()?;
             let mut a = Node::BinaryExpression { 
                 op: t.text, rhs: Box::new(rhs.clone()), lhs: Box::new(lhs.clone()) 
             };
@@ -287,7 +301,7 @@ impl Parser {
                 let t = self.peek().clone();
                 lhs = rhs.clone();
                 self.consume(t.kind)?;
-                rhs = self.arithmetic()?;
+                rhs = self.range()?;
                 let b = Node::BinaryExpression { 
                     op: t.text, rhs: Box::new(rhs.clone()), lhs: Box::new(lhs.clone()) 
                 };
@@ -298,7 +312,7 @@ impl Parser {
             while let DCOLON = self.peek().kind {
                 let t = self.peek().clone();
                 self.consume(t.kind)?;
-                let rhs = self.arithmetic()?;
+                let rhs = self.range()?;
                 lhs = Node::BinaryExpression {
                     op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
                 };
@@ -339,13 +353,6 @@ impl Parser {
                 self.consume(EQUAL)?;
                 let rhs = self.expression()?;
                 Ok(Node::BinaryExpression { op: "=".into(), lhs: Box::new(lhs), rhs: Box::new(rhs) })
-            },
-            TWODOT => {
-                self.consume(TWODOT).unwrap();
-                let rhs = self.logic_or()?;
-                Ok(Node::BinaryExpression { 
-                    op: "..".into(), lhs: Box::new(lhs), rhs: Box::new(rhs) 
-                })
             }
             _ => Ok(lhs)
         }
@@ -456,10 +463,13 @@ impl Parser {
         Ok(Node::Block(statements))
     }
 
-    fn module(&mut self) -> Result<Node, ParseError> {
+    fn module_declaration(&mut self) -> Result<Node, ParseError> {
         self.consume(MODULE)?;
         let name = self.consume(IDENTIFIER)?.text;
-        let body = Box::new(self.block()?);
+        let body;
+        if let Node::Block(s) = self.block()? {
+            body = Box::new(Node::Module(s));
+        } else {unreachable!()}
         Ok(Node::ModuleDeclaration { name, body })
     }
 
@@ -470,13 +480,13 @@ impl Parser {
             RETURN   => self.return_statement()?,
             BREAK    => self.break_statement()?,
             CONTINUE => self.continue_statement()?,
-            RECORD    => self.record_declaration()?,
+            RECORD   => self.record_declaration()?,
             FUN      => self.fun_declaration()?,
             IF       => self.if_statement()?,
             WHILE    => self.while_statement()?,
             IMPORT   => self.import_statement()?,
             FOR      => self.for_statement()?,
-            MODULE   => self.module()?,
+            MODULE   => self.module_declaration()?,
             _        => self.expression()?,
         };
         // Optional semi-colon
@@ -501,16 +511,16 @@ impl Parser {
         Ok(node)
     }
 
-    fn program(&mut self) -> Result<Node, ParseError> {
+    fn module(&mut self) -> Result<Node, ParseError> {
         let mut statements = vec![];
         while !self.expect(END) {
             statements.push(self.statement()?);
         }
-        Ok(Node::Program(statements))
+        Ok(Node::Module(statements))
     }   
 
     pub fn parse(&mut self) -> Result<Node, ParseError> {
-        self.program()
+        self.module()
     }
 
 }

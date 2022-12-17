@@ -2,7 +2,7 @@ use std::io::{ stdout, Write };
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Node {
-    Program(Vec<Node>),
+    Module(Vec<Node>),
     Block(Vec<Node>),
     ModuleDeclaration {
         name: String,
@@ -86,7 +86,7 @@ impl Node {
                     statement.print(indent + 1);
                 }
             },
-            Node::Program(statements) => {
+            Node::Module(statements) => {
                 println!("program");
                 for statement in statements {
                     statement.print(indent + 1);
