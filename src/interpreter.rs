@@ -226,8 +226,6 @@ pub struct Interpreter {
     
     repl         : bool,
 
-    pub error_node: Node,
-
     instances    : HashMap<usize, Environment>,
     lists        : HashMap<usize, List>,
     records      : HashMap<usize, Record>,
@@ -251,8 +249,6 @@ impl Interpreter {
             current_scope: Scope::new(),
             globals      : Environment::new(),
             
-            error_node: Node::None,
-
             repl: false,
 
             instances : HashMap::new(),
@@ -435,7 +431,6 @@ impl Interpreter {
     pub fn eval(&mut self, node: Node) -> EvalResult {
         match node.clone() {
             Node::Module(statements) => {
-                self.error_node = node;
                 for statement in statements {
                     match self.eval(statement) {
                         Ok(v) => if self.repl && v != Value::None {
@@ -510,7 +505,6 @@ impl Interpreter {
                 Ok(Value::None)
             },
             Node::MapLiteral(map) => {
-                self.error_node = node;
                 let mut hmap = HashMap::new();
                 for (k, v) in map {
                     let key = self.eval(k)?.to_keyvalue(); 
@@ -522,7 +516,6 @@ impl Interpreter {
                 Ok(self.add_map(hmap))
             }
             Node::ForStatement { var, iter, body } => {
-                self.error_node = node;
                 match self.eval(*iter)? {
                     Value::List(id) => {
                         self.enter_scope();
@@ -575,7 +568,6 @@ impl Interpreter {
                 Ok(Value::None)
             }
             Node::LetStatement { name, expr } => {
-                self.error_node = node;
                 let val = self.eval(*expr)?;
                 if !self.current_scope.env.contains_key(&name) {
                     self.current_scope.env.insert(name, val); Ok(Value::None)
@@ -584,20 +576,13 @@ impl Interpreter {
                 }
             },
             Node::Return(expr) => Err(State::Return(self.eval(*expr)?)),
-            Node::IfExpression { cond, tru, fals } => {
-                self.error_node = node;
-                if let Value::Bool(t) = self.eval(*cond)? {
-                    if t { Ok(self.eval(*tru)?) } 
-                    else { Ok(self.eval(*fals)?) }
-                } else { 
-                    Err(State::Error(RuntimeError::TypeMismatch)) 
-                }
+            Node::IfExpression { cond, tru, fals } => if let Value::Bool(t) = self.eval(*cond)? {
+                if t { Ok(self.eval(*tru)?) } 
+                else { Ok(self.eval(*fals)?) }
+            } else { 
+                Err(State::Error(RuntimeError::TypeMismatch)) 
             }
             Node::RecordDeclaration { name, members } => {
-                self.error_node = node;
-                if self.current_scope.env.contains_key(&name) {
-                    return Err(State::Error(RuntimeError::AlreadyDefinedVarible));
-                }
                 self.add_record(Record {name, members});
                 Ok(Value::None)                
             },
@@ -614,35 +599,28 @@ impl Interpreter {
                     Ok(Value::Function(self.func_id - 1))
                 }
             },
-            Node::IfStatement { expr, body, els } => {
-                self.error_node = node;
-                if let Value::Bool(t) = self.eval(*expr)? {
-                    if t { Ok(self.eval(*body)?) } 
-                    else { Ok(self.eval(*els)?) }
-                } else { 
-                    Err(State::Error(RuntimeError::TypeMismatch)) 
-                }
+            Node::IfStatement { expr, body, els } => if let Value::Bool(t) = self.eval(*expr)? {
+                if t { Ok(self.eval(*body)?) } 
+                else { Ok(self.eval(*els)?) }
+            } else { 
+                Err(State::Error(RuntimeError::TypeMismatch)) 
             }
-            Node::WhileStatement { expr, body } => {
-                self.error_node = node;
-                loop {
-                    match self.eval(*expr.clone())? {
-                        Value::Bool(t) => if t {
-                            match self.eval(*body.clone()) {
-                                Ok(_) => {},
-                                Err(s) => match s {
-                                    State::Continue => continue,
-                                    State::Break => break Ok(Value::None),
-                                    _ => return Err(s)
-                                }
-                            };
-                        } else { return Ok(Value::None) }
-                        _ => return Err(State::Error(RuntimeError::TypeMismatch))
-                    }
+            Node::WhileStatement { expr, body } => loop {
+                match self.eval(*expr.clone())? {
+                    Value::Bool(t) => if t {
+                        match self.eval(*body.clone()) {
+                            Ok(_) => {},
+                            Err(s) => match s {
+                                State::Continue => continue,
+                                State::Break => break Ok(Value::None),
+                                _ => return Err(s)
+                            }
+                        };
+                    } else { return Ok(Value::None) }
+                    _ => return Err(State::Error(RuntimeError::TypeMismatch))
                 }
             },
             Node::BinaryExpression { op, lhs, rhs } => {
-                self.error_node = node;
                 if op.as_str() == "=" {
                     let right_value = self.eval(*rhs)?;
                     return match *lhs {
@@ -855,18 +833,14 @@ impl Interpreter {
                 let values = self.collect_values(nodes)?;
                 Ok(self.add_list(values))
             },
-            Node::Identifier(s) => {
-                self.error_node = node;
-                match self.current_scope.resolve(&s) {
-                    Some(value) => Ok(value),
-                    None => match self.globals.get(&s) {
-                        Some(val) => Ok(val.clone()),
-                        None => Err(State::Error(RuntimeError::UndefinedVariable))
-                    }
+            Node::Identifier(s) => match self.current_scope.resolve(&s) {
+                Some(value) => Ok(value),
+                None => match self.globals.get(&s) {
+                    Some(val) => Ok(val.clone()),
+                    None => Err(State::Error(RuntimeError::UndefinedVariable))
                 }
             },
             Node::UnaryExpression { op, operand } => {
-                self.error_node = node;
                 let operand_value = self.eval(*operand)?;
                 match op.as_str() {
                     "+" => match operand_value {

@@ -169,7 +169,6 @@ pub fn init(interpreter: &mut Interpreter) {
         } 
     ));
 
-
     interpreter.add_native_function(NativeFunction::new( 
         String::from("contains"), 
         2,

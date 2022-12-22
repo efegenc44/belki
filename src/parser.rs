@@ -21,45 +21,57 @@ impl std::fmt::Display for ParseError {
 
 // Grammar
 //
-// <program>           ::= <statement>* <End> 
-// <statement>         ::= <expression>
-//                       | <block>
-//                       | <let statement>
+// <program>           ::= <declaration>* <End> 
+// <declaration>       ::= (<let statement>
+//                       | <record declaration>
+//                       | <fun declaration>
+//                       | <module declaration>
+//                       | <statement>) [';']
+// <statement>         ::= (<block>
 //                       | <return statement>
-//                       | <class declaration>
+//                       | <break statement>
+//                       | <continue statement>
 //                       | <if statement>
 //                       | <while statement>
 //                       | <import statement>
-// <block>             ::= '{' <statement>* '}' 
-// <import statement>  ::= 'import' <identifier>
-// <let statement>     ::= 'let' <identifier> '=' <expression>
-// <return statement>  ::= 'return' <expression>
-// <class declaration> ::= 'class' <identifier> '{' (<identifier> | <fun declaration>)* '}'
-// <fun declaration>   ::= 'fun' <identifier> '(' (<identifier> ',')* [<identifier>] ')' <block>
-// <else>              ::= 'else' (<block> | <expression> <block> [<else>])
-// <if statement>      ::= 'if' <expression> <block> <else>*
-// <while statement>   ::= 'while' <expression> <block>
-// <expression>        ::= <logic> ['=' <expression>]
-// <logic>             ::= <relation> [(&& | ||) <relation>]*  
-// <relation>          ::= <arithmetic> [(== | != | < | > | <= | >=) <arithmetic>]  
-// <arithmetic>        ::= <term> [(+ | - | |>) <term>]*
-// <term>              ::= <product> [(* | / | %) <product>]* 
-// <product>           ::= <integer>
-//                       | <float>
-//                       | <string>
-//                       | <identifier>
-//                       | '(' <expression> ')'
-//                       | (+ | - | !) <product>
-//                       | 'true'
-//                       | 'false'
-//                       | 'nothing'
-//                       | <product> '.' <identifier>
-//                       | <product> ?no newline? '(' (<expression>',')* [<expression>] ')'
-//                       | <product> ?no newline? '[' <expression> ']' 
-//                       | '[' (<expression> ',')* [<expression>] ']' 
-
-
-
+//                       | <for statement>
+//                       | <expression>) [';']
+// <module declaration> ::= 'module' <identifier> <block> 
+// <block>              ::= '{' <statement>* '}' 
+// <for statement>      ::= 'for' <identifier> ':' <expression> <statement>    
+// <continue statement> ::= 'continue'
+// <break statement>    ::= 'break'
+// <import statement>   ::= 'import' <string>
+// <let statement>      ::= 'let' <identifier> '=' <expression>
+// <return statement>   ::= 'return' <expression>
+// <record declaration> ::= 'record' <identifier> '(' <identifier>* ')'
+// <fun declaration>    ::= 'fun' <identifier> ['(' (<identifier> ',')* [<identifier>] ')'] (<block> | <expression>) 
+// <else>               ::= 'else' <statement>
+// <if statement>       ::= 'if' <expression> <statement>
+// <while statement>    ::= 'while' <expression> <statement>
+// <expression>         ::= <logic or> ['=' <expression>]
+// <logic or>           ::= <logic and> ('||' <logic and>)*  
+// <logic and>          ::= <type relation> ('&&' <type relation>)*  
+// <type relation>      ::= <relation> ('::' <relation>)*
+// <relation>           ::= <range> (('==' | '!=' | '<' | '>' | '<=' | '>=') <range>)*
+// <range>              ::= <arithmetic> '..' <arithmetic> 
+// <arithmetic>         ::= <term> (('+' | '-' | '|>') <term>)*
+// <term>               ::= <product> (('*' | '/' | '%') <product>)* 
+// <product>            ::= <integer> ['.' [<integer>]]
+//                        | <string>
+//                        | <identifier>
+//                        | 'true'
+//                        | 'false'
+//                        | 'nothing'
+//                        | '[' (<expression> ',')* [<expression>] ']' 
+//                        | '(' <expression> ')'
+//                        | ('+' | '-' | '!') <product>
+//                        | 'fun' ['(' (<identifier> ',')* [<identifier>] ')'] (<block> | <expression>)
+//                        | 'if' <expression> 'then' <expression> 'else' <expression>
+//                        | '#' '[' (<expression> ':' <expression> ',')* [<expression> ':' <expression>] ']'
+//                        | <product> '.' <identifier>
+//                        | <product> ?no newline? '(' (<expression>',')* [<expression>] ')'
+//                        | <product> ?no newline? '[' <expression> ']' 
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -119,6 +131,23 @@ impl Parser {
         }
         Ok(exps)
     }
+
+    // <product> ::= <integer>
+    //             | <float>
+    //             | <string>
+    //             | <identifier>
+    //             | 'true'
+    //             | 'false'
+    //             | 'nothing'
+    //             | '[' (<expression> ',')* [<expression>] ']' 
+    //             | '(' <expression> ')'
+    //             | ('+' | '-' | '!') <product>
+    //             | 'fun' ['(' (<identifier> ',')* [<identifier>] ')'] (<block> | <expression>)
+    //             | 'if' <expression> 'then' <expression> 'else' <expression>
+    //             | '#' '[' (<expression> ':' <expression> ',')* [<expression> ':' <expression>] ']'
+    //             | <product> '.' <identifier>
+    //             | <product> ?no newline? '(' (<expression>',')* [<expression>] ')'
+    //             | <product> ?no newline? '[' <expression> ']' 
 
     fn product(&mut self) -> Result<Node, ParseError> {
         let t = self.next();
@@ -204,7 +233,7 @@ impl Parser {
             _ => return Err(ParseError::IllDefinedAST(t.loc)),
         };
         
-        // may written better
+        // may be written better
         loop {
             let ntnl = self.peek_with_nl();
             match ntnl.kind {
@@ -248,6 +277,7 @@ impl Parser {
         Ok(node)
     }
 
+    // <term> ::= <product> (('*' | '/' | '%') <product>)* 
     fn term(&mut self) -> Result<Node, ParseError> {
         let mut lhs = self.product()?;
         while let STAR | SLASH | PERCENT = self.peek().kind {
@@ -261,6 +291,7 @@ impl Parser {
         Ok(lhs)
     }
 
+    // <arithmetic> ::= <term> (('+' | '-' | '|>') <term>)*
     pub fn arithmetic(&mut self) -> Result<Node, ParseError> {
         let mut lhs = self.term()?;
         while let PLUS | MINUS | PIPE = self.peek().kind {
@@ -273,8 +304,9 @@ impl Parser {
         }
         Ok(lhs)
     }
-
-    pub fn  range(&mut self) -> Result<Node, ParseError> {
+    
+    // <range> ::= <arithmetic> '..' <arithmetic> 
+    pub fn range(&mut self) -> Result<Node, ParseError> {
         let lhs = self.arithmetic()?;
         match self.peek().kind {
             TWODOT => {
@@ -288,6 +320,7 @@ impl Parser {
         }
     }
 
+    // <relation> ::= <range> (('==' | '!=' | '<' | '>' | '<=' | '>=') <range>)*
     fn relation(&mut self) -> Result<Node, ParseError> {
         let mut lhs = self.range()?;
         if let DEQUAL | BANGEQUAL | GREATER | GREATEREQUAL | LESS | LESSEQUAL = self.peek().kind {
@@ -309,36 +342,30 @@ impl Parser {
             }
             Ok(a)
         } else {
-            while let DCOLON = self.peek().kind {
-                let t = self.peek().clone();
-                self.consume(t.kind)?;
-                let rhs = self.range()?;
-                lhs = Node::BinaryExpression {
-                    op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
-                };
-            } Ok(lhs)
+            Ok(lhs)
         }
     }
 
-    pub fn logic(&mut self) -> Result<Node, ParseError> {
+    // <type relation> ::= <relation> ('::' <relation>)*
+    pub fn type_relation(&mut self) -> Result<Node, ParseError> {
         let mut lhs = self.relation()?;
-        while let DAMPERSAND = self.peek().kind {
+        while let DCOLON = self.peek().kind {
             let t = self.peek().clone();
             self.consume(t.kind)?;
             let rhs = self.relation()?;
             lhs = Node::BinaryExpression {
                 op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
             };
-        }
-        Ok(lhs)
+        } Ok(lhs)
     }
 
-    pub fn logic_or(&mut self) -> Result<Node, ParseError> {
-        let mut lhs = self.logic()?;
-        while let DVLINE = self.peek().kind {
+    // <logic and> ::= <type relation> ('&&' <type relation>)*  
+    pub fn logic_and(&mut self) -> Result<Node, ParseError> {
+        let mut lhs = self.type_relation()?;
+        while let DAMPERSAND = self.peek().kind {
             let t = self.peek().clone();
             self.consume(t.kind)?;
-            let rhs = self.logic()?;
+            let rhs = self.type_relation()?;
             lhs = Node::BinaryExpression {
                 op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
             };
@@ -346,6 +373,21 @@ impl Parser {
         Ok(lhs)
     }
 
+    // <logic or> ::= <logic and> ('||' <logic and>)*  
+    pub fn logic_or(&mut self) -> Result<Node, ParseError> {
+        let mut lhs = self.logic_and()?;
+        while let DVLINE = self.peek().kind {
+            let t = self.peek().clone();
+            self.consume(t.kind)?;
+            let rhs = self.logic_and()?;
+            lhs = Node::BinaryExpression {
+                op: t.text, lhs: Box::new(lhs), rhs: Box::new(rhs)
+            };
+        }
+        Ok(lhs)
+    }
+
+    // <expression> ::= <logic or> ['=' <expression>]
     pub fn expression(&mut self) -> Result<Node, ParseError> {
         let lhs = self.logic_or()?;
         match self.peek().kind {
@@ -358,26 +400,29 @@ impl Parser {
         }
     }
 
+    // <while statement> ::= 'while' <expression> <statement>
     fn while_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(WHILE)?;
-        Ok(Node::WhileStatement { expr: Box::new(self.expression()?), body: Box::new(self.statement_wo_decs()?) })
+        Ok(Node::WhileStatement { expr: Box::new(self.expression()?), body: Box::new(self.statement()?) })
     }
 
+    // <if statement> ::= 'if' <expression> <statement> [<else>]
     fn if_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(IF)?;
         Ok(Node::IfStatement { 
             expr: Box::new(self.expression()?), 
-            body: Box::new(self.statement_wo_decs()?), 
+            body: Box::new(self.statement()?), 
             els: if self.peek().kind == ELSE { Box::new(self.els()?) } else { Box::new(Node::None) } 
         })
     }
 
+    // <else> ::= 'else' <statement>
     fn els(&mut self) -> Result<Node, ParseError> {
         self.consume(ELSE)?;
-        self.statement_wo_decs()
+        self.statement()
     }
 
-    // todo
+    // <fun declaration> ::= 'fun' <identifier> ['(' (<identifier> ',')* [<identifier>] ')'] (<block> | <expression>) 
     fn fun_declaration(&mut self) -> Result<Node, ParseError> {
         self.consume(FUN)?;
         let name = self.consume(IDENTIFIER)?.text;
@@ -401,7 +446,7 @@ impl Parser {
         Ok(Node::FunctionDeclaration { name, args, body })
     }
     
-    // todo
+    // <record declaration> ::= 'record' <identifier> '(' <identifier>* ')'
     fn record_declaration(&mut self) -> Result<Node, ParseError> {
         self.consume(RECORD)?;
         let name = self.consume(IDENTIFIER)?.text;
@@ -417,11 +462,13 @@ impl Parser {
         Ok(Node::RecordDeclaration { name, members })
     }
 
+    // <return statement> ::= 'return' <expression>
     fn return_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(RETURN)?;
         Ok(Node::Return(Box::new(self.expression()?)))
     }
 
+    // <let statement> ::= 'let' <identifier> '=' <expression>
     fn let_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(LET)?;
         let name = self.consume(IDENTIFIER)?.text;
@@ -430,39 +477,45 @@ impl Parser {
         Ok(Node::LetStatement { name, expr })  
     }
 
+    // <import statement> ::= 'import' <string>
     fn import_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(IMPORT)?;
         Ok(Node::Import(self.consume(STRING)?.text))
     }
 
+    // <break statement> ::= 'break'
     fn break_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(BREAK)?;
         Ok(Node::Break)
     }
 
+    // <continue statement> ::= 'continue'
     fn continue_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(CONTINUE)?;
         Ok(Node::Continue)
     }
 
+    // <for statement> ::= 'for' <identifier> ':' <expression> <statement>
     fn for_statement(&mut self) -> Result<Node, ParseError> {
         self.consume(FOR)?;
         let var = self.consume(IDENTIFIER)?.text;
         self.consume(COLON)?;
         let iter = Box::new(self.expression()?);
-        let body = Box::new(self.statement_wo_decs()?);
+        let body = Box::new(self.statement()?);
         Ok(Node::ForStatement { var, iter, body })
     }
 
+    // <block> ::= '{' <statement>* '}' 
     fn block(&mut self) -> Result<Node, ParseError> {
         self.consume(LCURLY)?;
         let mut statements: Vec<Node> = vec![];
         while !self.expect(RCURLY) {
-            statements.push(self.statement()?);
+            statements.push(self.declaration()?);
         }
         Ok(Node::Block(statements))
     }
 
+    // <module declaration> ::= 'module' <identifier> <block> 
     fn module_declaration(&mut self) -> Result<Node, ParseError> {
         self.consume(MODULE)?;
         let name = self.consume(IDENTIFIER)?.text;
@@ -473,48 +526,55 @@ impl Parser {
         Ok(Node::ModuleDeclaration { name, body })
     }
 
+    // <statement> ::= (<block>
+    //               | <return statement>
+    //               | <break statement>
+    //               | <continue statement>
+    //               | <if statement>
+    //               | <while statement>
+    //               | <import statement>
+    //               | <for statement>
+    //               | <expression>) [';']
     fn statement(&mut self) -> Result<Node, ParseError> {
         let node = match self.peek().kind {
             LCURLY   => self.block()?,
-            LET      => self.let_statement()?,
             RETURN   => self.return_statement()?,
             BREAK    => self.break_statement()?,
             CONTINUE => self.continue_statement()?,
+            IF       => self.if_statement()?,
+            WHILE    => self.while_statement()?,
+            IMPORT   => self.import_statement()?,
+            FOR      => self.for_statement()?,
+            _        => self.expression()?,
+        };
+        // Optional semi-colon
+        self.expect(SEMICOLON);
+        Ok(node)
+    }
+    
+    // <declaration> ::= (<let statement>
+    //                 | <record declaration>
+    //                 | <fun declaration>
+    //                 | <module declaration>
+    //                 | <statement>) [';']
+    fn declaration(&mut self) -> Result<Node, ParseError> {
+        let node = match self.peek().kind {
+            LET      => self.let_statement()?,
             RECORD   => self.record_declaration()?,
             FUN      => self.fun_declaration()?,
-            IF       => self.if_statement()?,
-            WHILE    => self.while_statement()?,
-            IMPORT   => self.import_statement()?,
-            FOR      => self.for_statement()?,
             MODULE   => self.module_declaration()?,
-            _        => self.expression()?,
+            _        => self.statement()?,
         };
         // Optional semi-colon
         self.expect(SEMICOLON);
         Ok(node)
     }
 
-    fn statement_wo_decs(&mut self) -> Result<Node, ParseError> {
-        let node = match self.peek().kind {
-            LCURLY   => self.block()?,
-            RETURN   => self.return_statement()?,
-            BREAK    => self.break_statement()?,
-            CONTINUE => self.continue_statement()?,
-            IF       => self.if_statement()?,
-            WHILE    => self.while_statement()?,
-            IMPORT   => self.import_statement()?,
-            FOR      => self.for_statement()?,
-            _        => self.expression()?,
-        };
-        // Optional semi-colon
-        self.expect(SEMICOLON);
-        Ok(node)
-    }
-
+    // <program> ::= <declaration>* <End> 
     fn module(&mut self) -> Result<Node, ParseError> {
         let mut statements = vec![];
         while !self.expect(END) {
-            statements.push(self.statement()?);
+            statements.push(self.declaration()?);
         }
         Ok(Node::Module(statements))
     }   
