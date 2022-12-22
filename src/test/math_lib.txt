@@ -2,3 +2,4 @@ import "math"
 
 assert(math.pow(3, 4) == 81)
 assert(math.sqrt(2) == 1.4142135)
+assert(math.pi == 3.1415927)

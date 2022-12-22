@@ -32,4 +32,6 @@ pub fn init(interpreter: &mut Interpreter) {
             }
         } 
     ));
+
+    interpreter.add_variable_to_module("math".to_string(), "pi".to_string(), Value::Float(std::f32::consts::PI))
 }

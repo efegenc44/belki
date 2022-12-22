@@ -1,12 +1,24 @@
+use std::fmt::Display;
+
 use crate::token::{ TokenKind, Token, Location };
 
 use TokenKind::*;
 
 #[derive(Debug)]
 pub enum LexError {
-    UnexpectedCharacter,
-    UnknownCharacter,
-    UnknownEscapeSequence
+    UnexpectedCharacter(Location),
+    UnknownCharacter(Location),
+    UnknownEscapeSequence(Location)
+}
+
+impl Display for LexError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnexpectedCharacter(loc)   => write!(f, "\n  An error occured while lexing:\n      Unexpected Character at {}\n", loc),
+            Self::UnknownCharacter(loc)      => write!(f, "\n  An error occured while lexing:\n      Unknown Character at {}\n", loc),
+            Self::UnknownEscapeSequence(loc) => write!(f, "\n  An error occured while lexing:\n      Unknown Escape Sequence at {}\n", loc),
+        }
+    }
 }
 
 pub struct Lexer {
@@ -26,7 +38,7 @@ impl Lexer {
         Lexer {
             source: source + "\0",
             start: 0, current: 0,
-            row: 0, col: 1
+            row: 1, col: 1
         }
     }
 
@@ -35,7 +47,7 @@ impl Lexer {
     }
 
     fn next(&mut self) -> char {
-        self.row += 1; 
+        self.col += 1; 
         self.current += 1;
         self.source.as_bytes()[self.current - 1] as char
     }
@@ -54,7 +66,7 @@ impl Lexer {
         }
         
         if self.peek().is_alphabetic() {
-            return Err(LexError::UnexpectedCharacter);
+            return Err(LexError::UnexpectedCharacter(self.get_loc()));
         }
         
         Ok(self.make_token(INTEGER))
@@ -101,44 +113,25 @@ impl Lexer {
             || self.peek() == '"') 
         {
             if self.expect('\\') {
-                if self.expect('n') {
-                    value += &'\n'.to_string();
-                }
-                else if self.expect('\\') {
-                    value += &'\\'.to_string();
-                }
-                else if self.expect('0') {
-                    value += &'\0'.to_string();
-                }
-                else if self.expect('t') {
-                    value += &'\t'.to_string();
-                }
-                else if self.expect('r') {
-                    value += &'\r'.to_string();
-                }
-                else if self.expect('"') {
-                    value += &'\"'.to_string();
-                }
-                else if self.expect('r') {
-                    value += &'\r'.to_string();
-                }
-                else {
-                    return Err(LexError::UnknownEscapeSequence);
-                }
-                continue;
+                match self.peek() {
+                    '\\' => value += "\\",
+                    'n' => value += "\n",
+                    '0' => value += "\0",
+                    't' => value += "\t",
+                    'r' => value += "\r",
+                    '"' => value += "\"",
+                    // FIX 
+                    _ => return Err(LexError::UnknownEscapeSequence(self.get_loc()))
+                } self.next(); continue;
             }
             value += &self.next().to_string();
         }
         // Closing '"'.
         if !self.expect('"') {
-            return Err(LexError::UnexpectedCharacter);
+            return Err(LexError::UnexpectedCharacter(self.get_loc()));
         }
 
-        Ok(Token::new(
-            STRING, 
-            value,
-            self.get_loc()
-        ))
+        Ok(Token::new(STRING, value, self.get_loc()))
     }
 
     fn get_text(&mut self) -> String {
@@ -220,13 +213,12 @@ impl Lexer {
                 } else { Ok(self.make_token(SLASH)) }
             ' ' | '\t' | '\r' => Ok(self.make_token(WHITESPACE)), 
             '\n' => {
-                self.col += 1;
-                self.row = 0;
+                self.row += 1;
+                self.col = 1;
                 Ok(self.make_token(NEWLINE))
             }
-            _ => {
-                Err(LexError::UnknownCharacter)
-            },
+            // FIX 
+            _ => Err(LexError::UnknownCharacter(Location::new(self.row, self.col - 1)))
 
         }
     }

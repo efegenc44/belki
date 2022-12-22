@@ -37,6 +37,29 @@ pub enum RuntimeError {
     IllegalReturn,
 }
 
+impl std::fmt::Display for RuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RuntimeError::TypeMismatch          => write!(f, "\n  An error occured at Runtime:\n      Type Mismatch\n"),
+            RuntimeError::ArgNumMismatch        => write!(f, "\n  An error occured at Runtime:\n      Wrong Number of Arguments\n"),
+            RuntimeError::AssignmentError       => write!(f, "\n  An error occured at Runtime:\n      Assignment Error\n"),
+            RuntimeError::MemberAccessError     => write!(f, "\n  An error occured at Runtime:\n      Member Access Error\n"),
+            RuntimeError::IndexOutOfRange       => write!(f, "\n  An error occured at Runtime:\n      Index Out of Range\n"),
+            RuntimeError::UndefinedVariable     => write!(f, "\n  An error occured at Runtime:\n      Undefined Variable\n"),
+            RuntimeError::AlreadyDefinedVarible => write!(f, "\n  An error occured at Runtime:\n      Already Defined Variable\n"),
+            RuntimeError::DivisionByZero        => write!(f, "\n  An error occured at Runtime:\n      Division By Zero Error\n"),
+            RuntimeError::AssertionFailure      => write!(f, "\n  An error occured at Runtime:\n      Assertion Failed\n"),
+            RuntimeError::BadRange              => write!(f, "\n  An error occured at Runtime:\n      Improper Range\n"),
+            RuntimeError::KeyError              => write!(f, "\n  An error occured at Runtime:\n      Improper Key Value \n"),
+            RuntimeError::HashError             => write!(f, "\n  An error occured at Runtime:\n      Unhashable Value\n"),
+            RuntimeError::ReturnedError         => write!(f, "\n  An error occured at Runtime:\n      Expression Returned Error\n"),
+            RuntimeError::IllegalContinue       => write!(f, "\n  An error occured at Runtime:\n      Illegal Continue\n"),
+            RuntimeError::IllegalBreak          => write!(f, "\n  An error occured at Runtime:\n      Illegal Break\n"),
+            RuntimeError::IllegalReturn         => write!(f, "\n  An error occured at Runtime:\n      Illegal Return\n"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum State {
     Return(Value),
@@ -61,14 +84,14 @@ impl Scope {
         Scope { env: HashMap::new(), upper: None }
     }
 
-    fn assign(&mut self, var: &String, val: &Value) -> Result<(), State> {
+    fn assign(&mut self, var: &String, val: &Value) -> Result<(), RuntimeError> {
         match self.env.get_mut(var) {
             Some(value) => {
                 *value = val.clone(); Ok(())
             }
             None => match &mut self.upper {
                 Some(scope) => scope.assign(var, val),
-                None => Err(State::Error(RuntimeError::UndefinedVariable))
+                None => Err(RuntimeError::UndefinedVariable)
             }
         }
     }
@@ -203,6 +226,8 @@ pub struct Interpreter {
     
     repl         : bool,
 
+    pub error_node: Node,
+
     instances    : HashMap<usize, Environment>,
     lists        : HashMap<usize, List>,
     records      : HashMap<usize, Record>,
@@ -225,6 +250,8 @@ impl Interpreter {
         Interpreter { 
             current_scope: Scope::new(),
             globals      : Environment::new(),
+            
+            error_node: Node::None,
 
             repl: false,
 
@@ -313,8 +340,8 @@ impl Interpreter {
     }
 
     pub fn add_native_function_to_module(&mut self, module_name: String, func: NativeFunction) {
-        let module_val = self.eval(Node::Identifier(module_name))
-            .expect("Expected Value");
+        let module_val = self.eval(Node::Identifier(module_name.clone()))
+            .expect(&format!("No Module Named {}", module_name));
         match module_val {
             Value::Module(id) => {
                 let module = self.modules.get_mut(&id).unwrap();
@@ -323,7 +350,19 @@ impl Interpreter {
                 self.nfunctions.insert(id, func.clone());
                 module.scope.env.insert(func.name.clone(), Value::NativeFunction(id));
             } 
-            _ => {}
+            _ => unreachable!()
+        }
+    }
+
+    pub fn add_variable_to_module(&mut self, module_name: String, name: String, value: Value) {
+        let module_val = self.eval(Node::Identifier(module_name.clone()))
+            .expect(&format!("No Module Named {}", module_name));
+        match module_val {
+            Value::Module(id) => {
+                let module = self.modules.get_mut(&id).unwrap();
+                module.scope.env.insert(name, value);
+            } 
+            _ => unreachable!()
         }
     }
 
@@ -394,8 +433,9 @@ impl Interpreter {
     }
 
     pub fn eval(&mut self, node: Node) -> EvalResult {
-        match node {
+        match node.clone() {
             Node::Module(statements) => {
+                self.error_node = node;
                 for statement in statements {
                     match self.eval(statement) {
                         Ok(v) => if self.repl && v != Value::None {
@@ -438,14 +478,14 @@ impl Interpreter {
                 }
                 
                 let source = fs::read_to_string(path.clone())
-                    .expect("File read error");     
+                    .expect("\n  Error while reading the file\n");     
     
 
                 let mut lexer = Lexer::new(source);
                 let tokens = match lexer.tokens() {
                     Ok(tokens) => tokens,
                     Err(error) => {
-                        println!("{:?}", error);
+                        println!("{}", error);
                         exit(0);
                     }
                 };
@@ -453,7 +493,7 @@ impl Interpreter {
                 let node = match parser.parse() {
                     Ok(node) => node,
                     Err(error) => {
-                        println!("{:?}", error);
+                        println!("{}", error);
                         exit(0)
                     }
                 };
@@ -470,6 +510,7 @@ impl Interpreter {
                 Ok(Value::None)
             },
             Node::MapLiteral(map) => {
+                self.error_node = node;
                 let mut hmap = HashMap::new();
                 for (k, v) in map {
                     let key = self.eval(k)?.to_keyvalue(); 
@@ -481,6 +522,7 @@ impl Interpreter {
                 Ok(self.add_map(hmap))
             }
             Node::ForStatement { var, iter, body } => {
+                self.error_node = node;
                 match self.eval(*iter)? {
                     Value::List(id) => {
                         self.enter_scope();
@@ -533,6 +575,7 @@ impl Interpreter {
                 Ok(Value::None)
             }
             Node::LetStatement { name, expr } => {
+                self.error_node = node;
                 let val = self.eval(*expr)?;
                 if !self.current_scope.env.contains_key(&name) {
                     self.current_scope.env.insert(name, val); Ok(Value::None)
@@ -541,13 +584,17 @@ impl Interpreter {
                 }
             },
             Node::Return(expr) => Err(State::Return(self.eval(*expr)?)),
-            Node::IfExpression { cond, tru, fals } => if let Value::Bool(t) = self.eval(*cond)? {
+            Node::IfExpression { cond, tru, fals } => {
+                self.error_node = node;
+                if let Value::Bool(t) = self.eval(*cond)? {
                     if t { Ok(self.eval(*tru)?) } 
                     else { Ok(self.eval(*fals)?) }
                 } else { 
                     Err(State::Error(RuntimeError::TypeMismatch)) 
                 }
+            }
             Node::RecordDeclaration { name, members } => {
+                self.error_node = node;
                 if self.current_scope.env.contains_key(&name) {
                     return Err(State::Error(RuntimeError::AlreadyDefinedVarible));
                 }
@@ -567,36 +614,43 @@ impl Interpreter {
                     Ok(Value::Function(self.func_id - 1))
                 }
             },
-            Node::IfStatement { expr, body, els } => if let Value::Bool(t) = self.eval(*expr)? {
+            Node::IfStatement { expr, body, els } => {
+                self.error_node = node;
+                if let Value::Bool(t) = self.eval(*expr)? {
                     if t { Ok(self.eval(*body)?) } 
                     else { Ok(self.eval(*els)?) }
                 } else { 
                     Err(State::Error(RuntimeError::TypeMismatch)) 
                 }
-            Node::WhileStatement { expr, body } => loop {
-                match self.eval(*expr.clone())? {
-                    Value::Bool(t) => if t {
-                        match self.eval(*body.clone()) {
-                            Ok(_) => {},
-                            Err(s) => match s {
-                                State::Continue => continue,
-                                State::Break => break Ok(Value::None),
-                                State::Return(v) => return Err(State::Return(v)),
-                                State::Error(err) => return Err(State::Error(err))
-                            }
-                        };
-                    } else { return Ok(Value::None) }
-                    _ => return Err(State::Error(RuntimeError::TypeMismatch))
+            }
+            Node::WhileStatement { expr, body } => {
+                self.error_node = node;
+                loop {
+                    match self.eval(*expr.clone())? {
+                        Value::Bool(t) => if t {
+                            match self.eval(*body.clone()) {
+                                Ok(_) => {},
+                                Err(s) => match s {
+                                    State::Continue => continue,
+                                    State::Break => break Ok(Value::None),
+                                    _ => return Err(s)
+                                }
+                            };
+                        } else { return Ok(Value::None) }
+                        _ => return Err(State::Error(RuntimeError::TypeMismatch))
+                    }
                 }
             },
             Node::BinaryExpression { op, lhs, rhs } => {
+                self.error_node = node;
                 if op.as_str() == "=" {
                     let right_value = self.eval(*rhs)?;
                     return match *lhs {
-                        Node::Identifier(var) => {
-                            self.current_scope.assign(&var, &right_value)?;
-                            Ok(right_value)
-                        },
+                        Node::Identifier(var) => 
+                            match self.current_scope.assign(&var, &right_value) {
+                                Ok(()) => Ok(right_value),
+                                Err(err) => Err(State::Error(err))
+                            },
                         Node::BinaryExpression { op, lhs, rhs } => {
                             let llhs_value = self.eval(*lhs)?;
                             if op.as_str() == "." {
@@ -609,8 +663,10 @@ impl Interpreter {
                                     }
                                     (Value::Module(id), Node::Identifier(member)) => {
                                         let module = self.get_module_mut(&id);
-                                        module.scope.assign(&member, &right_value)?;
-                                        Ok(right_value)
+                                        match module.scope.assign(&member, &right_value) {
+                                            Ok(()) => Ok(right_value),
+                                            Err(err) => Err(State::Error(err))
+                                        }
                                     },
                                     _ => Err(State::Error(RuntimeError::MemberAccessError))
                                 }                            }
@@ -799,14 +855,18 @@ impl Interpreter {
                 let values = self.collect_values(nodes)?;
                 Ok(self.add_list(values))
             },
-            Node::Identifier(s) => match self.current_scope.resolve(&s) {
-                Some(value) => Ok(value),
-                None => match self.globals.get(&s) {
-                    Some(val) => Ok(val.clone()),
-                    None => Err(State::Error(RuntimeError::UndefinedVariable))
+            Node::Identifier(s) => {
+                self.error_node = node;
+                match self.current_scope.resolve(&s) {
+                    Some(value) => Ok(value),
+                    None => match self.globals.get(&s) {
+                        Some(val) => Ok(val.clone()),
+                        None => Err(State::Error(RuntimeError::UndefinedVariable))
+                    }
                 }
             },
             Node::UnaryExpression { op, operand } => {
+                self.error_node = node;
                 let operand_value = self.eval(*operand)?;
                 match op.as_str() {
                     "+" => match operand_value {

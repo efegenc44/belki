@@ -61,9 +61,8 @@ pub fn init(interpreter: &mut Interpreter) {
         String::from("print"), 
         1,
         |interpreter, args| {
-            for arg in args {
-                println!("{}", arg.get_string(interpreter));
-            }; Ok(Value::None)
+            println!("{}", args[0].get_string(interpreter));
+            Ok(Value::None)
         } 
     ));
 
@@ -91,7 +90,7 @@ pub fn init(interpreter: &mut Interpreter) {
     ));
 
     interpreter.add_native_function(NativeFunction::new( 
-        String::from("map_native"), 
+        String::from("map"), 
         2, 
         |interpreter, args| {
             match (&args[0], &args[1]) {

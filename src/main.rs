@@ -3,6 +3,8 @@ use std::io::{ stdin, stdout, Write };
 use std::fs;
 use std::process::exit;
 
+use interpreter::State;
+
 mod math_module;
 mod core_module;
 
@@ -28,11 +30,11 @@ fn repl() {
             break
         } 
     
-        let mut lexer = lexer::Lexer::new(line);
+        let mut lexer = lexer::Lexer::new(line.clone());
         let tokens = match lexer.tokens() {
             Ok(tokens) => tokens,
             Err(error) => {
-                println!("{:?}", error);
+                println!("{}", error);
                 continue;
             }
         };
@@ -41,30 +43,30 @@ fn repl() {
         let node = match parser.parse() {
             Ok(node) => node,
             Err(error) => {
-                println!("{:?}", error);
+                println!("{}", error);
                 continue;
             }
         };
-        // node.print(0);
+
         match interpreter.eval(node) {
             Ok(_) => {}
-            Err(error) => {
-                println!("{:?}", error);
-                continue;
-            }
+            Err(State::Error(error)) => {
+                println!("{}", error); continue; 
+            },
+            _ => unreachable!(),
         }
     }
 }
 
 fn from_file(path: String) -> Option<()> {
     let source = fs::read_to_string(path)
-        .expect("File read error");     
+        .expect("\n  Error while reading the file\n");     
     
     let mut lexer = lexer::Lexer::new(source);
     let tokens = match lexer.tokens() {
         Ok(tokens) => tokens,
         Err(error) => {
-            println!("{:?}", error); 
+            println!("{}", error); 
             return None;
         }
     };
@@ -73,19 +75,20 @@ fn from_file(path: String) -> Option<()> {
     let node = match parser.parse() {
         Ok(node) => node,
         Err(error) => {
-            println!("{:?}", error); 
+            println!("{}", error); 
             return None;
         }
     };
-    // node.print(0);
+
     let mut interpreter = interpreter::Interpreter::new();
     interpreter.init();
     
     match interpreter.eval(node) {
         Ok(_) => Some(()),
-        Err(error) => {
-            println!("{:?}", error); None 
-        }
+        Err(State::Error(error)) => {
+            println!("{}", error); None 
+        },
+        _ => unreachable!(),
     }
 }
 
@@ -101,6 +104,6 @@ fn main() {
         }
     } 
     else {
-        println!("Usage: ./<name> <file-path>");
+        println!("\n  Usage: ./<name> <file-path>");
     }
 }

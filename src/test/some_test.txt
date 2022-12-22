@@ -1,6 +1,6 @@
 import "math"
 
-fun map(func, list) {
+fun map2(func, list) {
     let i = 0
     while i < len(list) {
         // print(i)
@@ -38,19 +38,19 @@ fun list_equality(list1, list2) {
 }
 
 let a = [1.0, 3.0]
-map_native(math.sqrt, a)
+map(math.sqrt, a)
 assert(list_equality(a, [1.0, 1.7320508]))
 
 let b = [4, 6]
-map(square, b)
+map2(square, b)
 assert(list_equality(b, [16, 36]))
 
 let c = [9, 34]
-map_native(mul2, c)
+map(mul2, c)
 assert(list_equality(c, [18, 68]))
 
 let d = [4.0, 49.0]
-map(math.sqrt, d)
+map2(math.sqrt, d)
 assert(list_equality(d, [2.0, 7.0]))
 
 

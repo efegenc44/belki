@@ -5,9 +5,19 @@ use TokenKind::*;
 
 #[derive(Debug)]
 pub enum ParseError {
-    UnexpectedToken,
-    IllDefinedAST
+    UnexpectedToken(Location),
+    IllDefinedAST(Location)
 }
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnexpectedToken(loc) => write!(f, "\n  An error occures while parsing:\n      Unexpected Token at {}\n", loc),
+            Self::IllDefinedAST(loc)   => write!(f, "\n  An error occures while parsing:\n      Ill Defined AST at {}\n", loc),
+        }
+    }
+}
+
 
 // Grammar
 //
@@ -82,11 +92,6 @@ impl Parser {
         self.tokens[self.current].clone()    
     }
 
-    #[allow(dead_code)]
-    fn get_loc(&mut self) -> Location {
-        self.peek().loc
-    }
-
     fn expect(&mut self, expected: TokenKind) -> bool {
         if self.peek().kind == expected {
             self.next(); true
@@ -97,9 +102,7 @@ impl Parser {
 
     fn consume(&mut self, expected: TokenKind) -> Result<Token, ParseError> {
         if !self.expect(expected) {
-            dbg!(self.peek());
-            dbg!(expected);
-            Err(ParseError::UnexpectedToken)
+            Err(ParseError::UnexpectedToken(self.peek().loc))
         } else {
             Ok(self.tokens[self.current - 1].clone())
         }
@@ -198,10 +201,7 @@ impl Parser {
                 Node::MapLiteral(elements)
             }
             
-            _ => {
-                dbg!(t);
-                return Err(ParseError::IllDefinedAST);
-            }
+            _ => return Err(ParseError::IllDefinedAST(t.loc)),
         };
         
         // may written better
