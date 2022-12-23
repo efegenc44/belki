@@ -79,8 +79,8 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Parser {
-        Parser { tokens, current: 0 }
+    pub fn new() -> Parser {
+        Parser { tokens: vec![], current: 0 }
     }
 
     fn next(&mut self) -> Token {
@@ -579,7 +579,9 @@ impl Parser {
         Ok(Node::Module(statements))
     }   
 
-    pub fn parse(&mut self) -> Result<Node, ParseError> {
+    pub fn parse(&mut self, tokens: Vec<Token>) -> Result<Node, ParseError> {
+        self.tokens = tokens;
+        self.current = 0;
         self.module()
     }
 

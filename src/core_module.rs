@@ -39,7 +39,7 @@ pub fn init(interpreter: &mut Interpreter) {
         Value::Type(Type::Range)
     );
 
-    interpreter.add_record(Record { 
+    interpreter.add_record(true, Record { 
         name: "Error".into(), members: vec!["value".into()] 
     });
 
@@ -67,6 +67,28 @@ pub fn init(interpreter: &mut Interpreter) {
     ));
 
     interpreter.add_native_function(NativeFunction::new( 
+        String::from("string"), 
+        1,
+        |interpreter, args| {
+            Ok(Value::String(args[0].get_string(interpreter)))
+        } 
+    ));
+
+    interpreter.add_native_function(NativeFunction::new( 
+        String::from("list"), 
+        1,
+        |interpreter, args| {
+            match args[0] {
+                Value::Range(a, b) => {
+                    let list: Vec<_> = (a..b).into_iter().map(|x| Value::Int(x)).collect();
+                    Ok(interpreter.add_list(list))
+                },
+                _ => Err(State::Error(RuntimeError::TypeMismatch))
+            }
+        } 
+    ));
+
+    interpreter.add_native_function(NativeFunction::new( 
         String::from("type"), 
         1,
         |_, args| {
@@ -90,7 +112,7 @@ pub fn init(interpreter: &mut Interpreter) {
     ));
 
     interpreter.add_native_function(NativeFunction::new( 
-        String::from("map"), 
+        String::from("map_mut"), 
         2, 
         |interpreter, args| {
             match (&args[0], &args[1]) {
@@ -104,6 +126,27 @@ pub fn init(interpreter: &mut Interpreter) {
 
                     *interpreter.get_list_mut(list_id) = res;
                     Ok(Value::None)
+                },
+                _ => Err(State::Error(RuntimeError::TypeMismatch))
+            }
+        } 
+    ));
+
+    interpreter.add_native_function(NativeFunction::new( 
+        String::from("map"), 
+        2, 
+        |interpreter, args| {
+            match (&args[0], &args[1]) {
+                (_, Value::List(list_id)) => {
+                    let list = interpreter.get_list(list_id).clone();
+
+                    let res = list.iter().map(|element| {
+                        args[0].apply(interpreter, &[element.clone()])
+                            .expect("Value Expected")
+                    }).collect::<Vec<_>>();
+
+                    let ls = interpreter.add_list(res);
+                    Ok(ls)
                 },
                 _ => Err(State::Error(RuntimeError::TypeMismatch))
             }

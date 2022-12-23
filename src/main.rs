@@ -14,15 +14,17 @@ mod parser;
 mod ast;
 mod value;
 mod interpreter;
-mod test;
+mod tests;
 
 fn repl() {
     let mut interpreter = interpreter::Interpreter::new();
+    let mut lexer = lexer::Lexer::new();
+    let mut parser = parser::Parser::new();
     interpreter.init();
     interpreter.repl_mode();
     loop {
         let mut line = String::new();
-        print!("> "); 
+        print!("dipl > "); 
         let _ = stdout().flush();
         let _ = stdin().read_line(&mut line).unwrap();
         line = line.trim().to_string();
@@ -30,8 +32,7 @@ fn repl() {
             break
         } 
     
-        let mut lexer = lexer::Lexer::new(line.clone());
-        let tokens = match lexer.tokens() {
+        let tokens = match lexer.tokens(line.clone()) {
             Ok(tokens) => tokens,
             Err(error) => {
                 println!("{}", error);
@@ -39,8 +40,7 @@ fn repl() {
             }
         };
     
-        let mut parser = parser::Parser::new(tokens);
-        let node = match parser.parse() {
+        let node = match parser.parse(tokens) {
             Ok(node) => node,
             Err(error) => {
                 println!("{}", error);
@@ -62,8 +62,8 @@ fn from_file(path: String) -> Option<()> {
     let source = fs::read_to_string(path)
         .expect("\n  Error while reading the file\n");     
     
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = match lexer.tokens() {
+    let mut lexer = lexer::Lexer::new();
+    let tokens = match lexer.tokens(source) {
         Ok(tokens) => tokens,
         Err(error) => {
             println!("{}", error); 
@@ -71,8 +71,8 @@ fn from_file(path: String) -> Option<()> {
         }
     };
 
-    let mut parser = parser::Parser::new(tokens);
-    let node = match parser.parse() {
+    let mut parser = parser::Parser::new();
+    let node = match parser.parse(tokens) {
         Ok(node) => node,
         Err(error) => {
             println!("{}", error); 
@@ -104,6 +104,6 @@ fn main() {
         }
     } 
     else {
-        println!("\n  Usage: ./<name> <file-path>");
+        println!("\n  Usage: ./dipl <file-path>");
     }
 }

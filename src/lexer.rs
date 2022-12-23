@@ -34,9 +34,9 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    pub fn new(source: String) -> Lexer {
+    pub fn new() -> Lexer {
         Lexer {
-            source: source + "\0",
+            source: String::new(),
             start: 0, current: 0,
             row: 1, col: 1
         }
@@ -223,7 +223,13 @@ impl Lexer {
         }
     }
 
-    pub fn tokens(&mut self) -> Result<Vec<Token>, LexError> {
+    pub fn tokens(&mut self, source: String) -> Result<Vec<Token>, LexError> {
+        self.source = source + "\0";
+        self.start = 0; 
+        self.current = 0;
+        self.row = 1; 
+        self.col = 1;        
+        
         let mut tokens: Vec<Token> = vec![];
         
         let mut token = self.scan_token()?;

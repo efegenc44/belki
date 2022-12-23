@@ -4,7 +4,7 @@ fun fib(n) {
     return fib(n-1) + fib(n-2)
 }
 
-// assert(fib(10) == 55) 
+assert(fib(10) == 55) 
 // 11 stackoverflows
 
 let fib_table = #[]

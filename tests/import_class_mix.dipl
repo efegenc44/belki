@@ -1,4 +1,4 @@
-import "src/test/class_a.txt"
+import "tests/class_a.dipl"
 
 let o = class_a.A(7)
 

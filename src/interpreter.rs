@@ -393,14 +393,22 @@ impl Interpreter {
         );
     }
 
-    pub fn add_record(&mut self, record: Record) {
+    pub fn add_record(&mut self, global: bool, record: Record) {
         let id = self.record_id;
         self.records.insert(id, record.clone());
         self.record_id += 1;
-        self.current_scope.env.insert(
-            record.name,
-            Value::Type(Type::Custom(id))
-        );
+        if global {
+            self.globals.insert(
+                record.name, 
+                Value::Type(Type::Custom(id))
+            );
+        }
+        else {
+            self.current_scope.env.insert(
+                record.name,
+                Value::Type(Type::Custom(id))
+            );
+        }
     }
 
     pub fn add_list(&mut self, list: List) -> Value {
@@ -449,7 +457,9 @@ impl Interpreter {
             Node::Block(statements) => {
                 self.enter_scope();
                 for statement in statements {
-                    self.eval(statement)?;
+                    if let Err(state) = self.eval(statement) {
+                        self.exit_scope(); return Err(state)
+                    }
                 }
                 self.exit_scope();
                 Ok(Value::None)
@@ -458,7 +468,9 @@ impl Interpreter {
                 self.enter_scope();
                 let up = self.current_scope.upper.clone();
                 self.current_scope.upper = Some(Box::new(Scope::new()));
-                self.eval(*body)?;
+                if let Err(state) = self.eval(*body) {
+                    self.exit_scope(); return Err(state)
+                }
                 let scope = self.current_scope.clone();
                 self.current_scope.upper = up;
                 self.exit_scope();
@@ -476,16 +488,16 @@ impl Interpreter {
                     .expect("\n  Error while reading the file\n");     
     
 
-                let mut lexer = Lexer::new(source);
-                let tokens = match lexer.tokens() {
+                let mut lexer = Lexer::new();
+                let tokens = match lexer.tokens(source) {
                     Ok(tokens) => tokens,
                     Err(error) => {
                         println!("{}", error);
                         exit(0);
                     }
                 };
-                let mut parser = Parser::new(tokens);
-                let node = match parser.parse() {
+                let mut parser = Parser::new();
+                let node = match parser.parse(tokens) {
                     Ok(node) => node,
                     Err(error) => {
                         println!("{}", error);
@@ -527,7 +539,10 @@ impl Interpreter {
                                 Err(s) => match s {
                                     State::Continue => continue,
                                     State::Break => break,
-                                    _ => return Err(s)
+                                    _ => {
+                                        self.exit_scope();
+                                        return Err(s)
+                                    }
                                 }
                             };
                         }
@@ -542,7 +557,10 @@ impl Interpreter {
                                 Err(s) => match s {
                                     State::Continue => continue,
                                     State::Break => break,
-                                    _ => return Err(s)
+                                    _ => {
+                                        self.exit_scope();
+                                        return Err(s)
+                                    }
                                 }
                             };
                         }
@@ -557,7 +575,10 @@ impl Interpreter {
                                 Err(s) => match s {
                                     State::Continue => continue,
                                     State::Break => break,
-                                    _ => return Err(s)
+                                    _ => {
+                                        self.exit_scope();
+                                        return Err(s)
+                                    }
                                 }
                             };
                         }
@@ -583,7 +604,7 @@ impl Interpreter {
                 Err(State::Error(RuntimeError::TypeMismatch)) 
             }
             Node::RecordDeclaration { name, members } => {
-                self.add_record(Record {name, members});
+                self.add_record(false, Record {name, members});
                 Ok(Value::None)                
             },
             Node::FunctionDeclaration { name, args, body } => {
