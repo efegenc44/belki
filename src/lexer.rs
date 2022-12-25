@@ -1,27 +1,15 @@
-use std::fmt::Display;
-
 use crate::token::{ TokenKind, Token, Location };
 
 use TokenKind::*;
 
-#[derive(Debug)]
-pub enum LexError {
-    UnexpectedCharacter(Location),
-    UnknownCharacter(Location),
-    UnknownEscapeSequence(Location)
-}
+type LexError = String;
 
-impl Display for LexError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnexpectedCharacter(loc)   => write!(f, "\n  An error occured while lexing:\n      Unexpected Character at {}\n", loc),
-            Self::UnknownCharacter(loc)      => write!(f, "\n  An error occured while lexing:\n      Unknown Character at {}\n", loc),
-            Self::UnknownEscapeSequence(loc) => write!(f, "\n  An error occured while lexing:\n      Unknown Escape Sequence at {}\n", loc),
-        }
-    }
+fn lex_error(msg: String, loc: Location) -> LexError {
+    format!("\n  An error occured while lexing:\n    {}\n    {}\n", loc, msg)  
 }
 
 pub struct Lexer {
+    file: String,
     source: String,
 
     // Absolute position
@@ -34,11 +22,12 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    pub fn new() -> Lexer {
+    pub fn new(file: String) -> Lexer {
         Lexer {
+            file,
             source: String::new(),
             start: 0, current: 0,
-            row: 1, col: 1
+            row: 1, col: 0
         }
     }
 
@@ -58,21 +47,26 @@ impl Lexer {
         } else {
             false
         }
-    }
+    } 
 
     fn number(&mut self) -> Result<Token, LexError> {
+        let loc = self.get_loc();
         while self.peek().is_digit(10) {
             self.next();
         }
         
         if self.peek().is_alphabetic() {
-            return Err(LexError::UnexpectedCharacter(self.get_loc()));
+            return Err(lex_error(
+                format!("Unexpected Character '{}' at Number Sequence", self.peek()),
+                self.get_loc()
+            ));
         }
         
-        Ok(self.make_token(INTEGER))
+        Ok(Token::new(INTEGER, self.get_text(), loc))
     }
 
     fn identifier(&mut self) -> Result<Token, LexError> {
+        let loc = self.get_loc();
         while self.peek().is_alphanumeric() || self.peek() == '_' {
             self.next();          
         }
@@ -103,10 +97,13 @@ impl Lexer {
             _         => IDENTIFIER
         };
 
-        Ok(self.make_token(token_kind))
+        Ok(Token::new(token_kind, self.get_text(), loc)
+    )
     }
 
     fn string(&mut self) -> Result<Token, LexError> {
+        let loc = self.get_loc();
+        
         let mut value = String::new();
         while !(self.peek() == '\n' 
             || self.peek() == '\0'
@@ -120,18 +117,23 @@ impl Lexer {
                     't' => value += "\t",
                     'r' => value += "\r",
                     '"' => value += "\"",
-                    // FIX 
-                    _ => return Err(LexError::UnknownEscapeSequence(self.get_loc()))
+                    _ => return Err(lex_error(
+                        format!("Unexpected Escape Sequence '\\{}'", self.peek()),
+                        self.get_loc()
+                    ))
                 } self.next(); continue;
             }
             value += &self.next().to_string();
         }
         // Closing '"'.
         if !self.expect('"') {
-            return Err(LexError::UnexpectedCharacter(self.get_loc()));
+            return Err(lex_error(
+                format!("Unterminated String"),
+                self.get_loc()
+            ));
         }
 
-        Ok(Token::new(STRING, value, self.get_loc()))
+        Ok(Token::new(STRING, value, loc))
     }
 
     fn get_text(&mut self) -> String {
@@ -139,7 +141,7 @@ impl Lexer {
     }
 
     fn get_loc(&self) -> Location {
-        Location::new(self.row, self.col)
+        Location::new(self.row, self.col, self.file.clone())
     }
 
     fn make_token(&mut self, kind: TokenKind) -> Token {
@@ -148,7 +150,7 @@ impl Lexer {
 
     pub fn scan_token(&mut self) -> Result<Token, LexError> {
         self.start = self.current;
-        
+    
         let c = self.next();
 
         if c.is_digit(10) {
@@ -218,7 +220,10 @@ impl Lexer {
                 Ok(self.make_token(NEWLINE))
             }
             // FIX 
-            _ => Err(LexError::UnknownCharacter(Location::new(self.row, self.col - 1)))
+            _ => Err(lex_error(
+                format!("Unknown Character '{}'", c),
+                self.get_loc()
+            ))
 
         }
     }
@@ -228,7 +233,7 @@ impl Lexer {
         self.start = 0; 
         self.current = 0;
         self.row = 1; 
-        self.col = 1;        
+        self.col = 0;     
         
         let mut tokens: Vec<Token> = vec![];
         

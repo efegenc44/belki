@@ -1,75 +1,126 @@
+#[allow(unused_imports)]
 use std::io::{ stdout, Write };
+
+use crate::token::Location;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Node {
-    Module(Vec<Node>),
-    Block(Vec<Node>),
+    Module(Vec<Node>, Location),
+    Block(Vec<Node>, Location),
     ModuleDeclaration {
         name: String,
-        body: Box<Node>
+        body: Box<Node>,
+        loc: Location
     },
-    Import(String),
-    MapLiteral(Vec<(Node, Node)>),
+    Import(String, Location),
+    MapLiteral(Vec<(Node, Node)>, Location),
     ForStatement {
         var: String,
         iter: Box<Node>,
-        body: Box<Node>
+        body: Box<Node>,
+        loc: Location
     },
     LetStatement {
         name: String, 
-        expr: Box<Node>
+        expr: Box<Node>,
+        loc: Location
     },
-    Return(Box<Node>),
-    Break,
-    Continue,
+    Return(Box<Node>, Location),
+    Break(Location),
+    Continue(Location),
     RecordDeclaration { 
         name: String, 
         members: Vec<String>, 
+        loc: Location
     },
     FunctionDeclaration { 
         name: String, 
         args: Vec<String>, 
-        body: Box<Node>
+        body: Box<Node>,
+        loc: Location
     },
     IfStatement {
         expr: Box<Node>,
         body: Box<Node>,
-        els:  Box<Node> 
+        els:  Box<Node>,
+        loc:  Location 
     },
     IfExpression {
         cond: Box<Node>,
-        tru: Box<Node>,
-        fals: Box<Node> 
+        tru:  Box<Node>,
+        fals: Box<Node>,
+        loc:  Location 
     },
     WhileStatement {
         expr: Box<Node>,
         body: Box<Node>,
+        loc:  Location
     },
     BinaryExpression {
-        op: String,
+        op:  String,
         lhs: Box<Node>,
         rhs: Box<Node>,
+        loc: Location
     },
-    IntegerLiteral(i32),
-    FloatLiteral(f32),
-    ListLiteral(Vec<Node>),
-    StringLiteral(String),
-    Identifier(String),
-    Group(Box<Node>),
+    IntegerLiteral(i32, Location),
+    FloatLiteral(f32, Location),
+    ListLiteral(Vec<Node>, Location),
+    StringLiteral(String, Location),
+    Identifier(String, Location),
+    Group(Box<Node>, Location),
     UnaryExpression {
         op: String,
-        operand: Box<Node>
+        operand: Box<Node>,
+        loc: Location
     },
     Application {
         fun: Box<Node>,
-        args: Vec<Node> 
+        args: Vec<Node>,
+        loc: Location 
     },
-    True,
-    False,
-    Nothing,
+    True(Location),
+    False(Location),
+    Nothing(Location),
     None
 }
 
+impl Node {
+    // :D yes
+    pub fn get_loc(&self) -> Location {
+        match self {
+            Node::Module(_, loc)                                           => loc.clone(),
+            Node::Block(_, loc)                                            => loc.clone(),
+            Node::ModuleDeclaration { name: _, body: _, loc }              => loc.clone(),
+            Node::Import(_, loc)                                           => loc.clone(),
+            Node::MapLiteral(_, loc)                                       => loc.clone(),
+            Node::ForStatement { var: _, iter: _, body: _, loc }           => loc.clone(),
+            Node::LetStatement { name: _ , expr: _, loc }                  => loc.clone(),
+            Node::Return(_, loc)                                           => loc.clone(),
+            Node::Break(loc)                                               => loc.clone(),
+            Node::Continue(loc)                                            => loc.clone(),
+            Node::RecordDeclaration { name: _, members: _, loc }           => loc.clone(),
+            Node::FunctionDeclaration { name: _, args: _, body: _, loc }   => loc.clone(),
+            Node::IfStatement { expr: _, body: _, els: _, loc }            => loc.clone(),
+            Node::IfExpression { cond: _, tru: _, fals: _, loc }           => loc.clone(),
+            Node::WhileStatement { expr: _, body: _, loc }                 => loc.clone(),
+            Node::BinaryExpression { op: _, lhs: _, rhs: _, loc }          => loc.clone(),
+            Node::IntegerLiteral(_, loc)                                   => loc.clone(),
+            Node::FloatLiteral(_, loc)                                     => loc.clone(),
+            Node::ListLiteral(_, loc)                                      => loc.clone(),
+            Node::StringLiteral(_, loc)                                    => loc.clone(),
+            Node::Identifier(_, loc)                                       => loc.clone(),
+            Node::Group(_, loc)                                            => loc.clone(),
+            Node::UnaryExpression { op: _, operand: _, loc }               => loc.clone(),
+            Node::Application { fun: _, args: _, loc }                     => loc.clone(),
+            Node::True(loc)                                                => loc.clone(),
+            Node::False(loc)                                               => loc.clone(),
+            Node::Nothing(loc)                                             => loc.clone(),
+            Node::None                                                     => unreachable!(),
+        }
+    }
+}
+
+/*
 #[allow(dead_code)]
 impl Node {
     pub fn print(&self, indent: usize) {
@@ -207,3 +258,4 @@ impl Node {
     }
 
 }
+*/

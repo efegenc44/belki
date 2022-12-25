@@ -18,7 +18,7 @@ mod tests;
 
 fn repl() {
     let mut interpreter = interpreter::Interpreter::new();
-    let mut lexer = lexer::Lexer::new();
+    let mut lexer = lexer::Lexer::new("REPL".to_string());
     let mut parser = parser::Parser::new();
     interpreter.init();
     interpreter.repl_mode();
@@ -27,7 +27,7 @@ fn repl() {
         print!("dipl > "); 
         let _ = stdout().flush();
         let _ = stdin().read_line(&mut line).unwrap();
-        line = line.trim().to_string();
+        line = line.trim_end().to_string();
         if line == ".quit" {
             break
         } 
@@ -59,10 +59,10 @@ fn repl() {
 }
 
 fn from_file(path: String) -> Option<()> {
-    let source = fs::read_to_string(path)
+    let source = fs::read_to_string(path.clone())
         .expect("\n  Error while reading the file\n");     
     
-    let mut lexer = lexer::Lexer::new();
+    let mut lexer = lexer::Lexer::new(path);
     let tokens = match lexer.tokens(source) {
         Ok(tokens) => tokens,
         Err(error) => {
