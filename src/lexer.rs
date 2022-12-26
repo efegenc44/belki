@@ -10,7 +10,7 @@ fn lex_error(msg: String, loc: Location) -> LexError {
 
 pub struct Lexer {
     file: String,
-    source: String,
+    source: Vec<char>,
 
     // Absolute position
     start: usize,
@@ -25,20 +25,20 @@ impl Lexer {
     pub fn new(file: String) -> Lexer {
         Lexer {
             file,
-            source: String::new(),
+            source: vec![],
             start: 0, current: 0,
-            row: 1, col: 0
+            row: 1, col: 1
         }
     }
 
     fn peek(&self) -> char {
-        self.source.as_bytes()[self.current] as char
+        self.source[self.current]
     }
 
     fn next(&mut self) -> char {
         self.col += 1; 
         self.current += 1;
-        self.source.as_bytes()[self.current - 1] as char
+        self.source[self.current - 1]
     }
 
     fn expect(&mut self, expected: char) -> bool {
@@ -62,7 +62,7 @@ impl Lexer {
             ));
         }
         
-        Ok(Token::new(INTEGER, self.get_text(), loc))
+        Ok(self.make_token(INTEGER, loc))
     }
 
     fn identifier(&mut self) -> Result<Token, LexError> {
@@ -74,10 +74,10 @@ impl Lexer {
         while self.peek() == '\'' {
             self.next();
         }
-
-        let text = &self.source[self.start..self.current];
+        
+        let text = &self.source[self.start..self.current].iter().collect::<String>();
     
-        let token_kind = match text {
+        let token_kind = match text.as_str() {
             "record"  => RECORD,
             "let"     => LET,
             "fun"     => FUN,
@@ -97,13 +97,12 @@ impl Lexer {
             _         => IDENTIFIER
         };
 
-        Ok(Token::new(token_kind, self.get_text(), loc)
-    )
+        Ok(self.make_token(token_kind, loc))
     }
 
     fn string(&mut self) -> Result<Token, LexError> {
         let loc = self.get_loc();
-        
+        self.expect('"');
         let mut value = String::new();
         while !(self.peek() == '\n' 
             || self.peek() == '\0'
@@ -137,22 +136,22 @@ impl Lexer {
     }
 
     fn get_text(&mut self) -> String {
-        self.source[self.start..self.current].to_string()
+        self.source[self.start..self.current].iter().collect()
     }
 
     fn get_loc(&self) -> Location {
         Location::new(self.row, self.col, self.file.clone())
     }
 
-    fn make_token(&mut self, kind: TokenKind) -> Token {
-        Token::new(kind, self.get_text(), self.get_loc())
+    fn make_token(&mut self, kind: TokenKind, loc: Location) -> Token {
+        Token::new(kind, self.get_text(), loc)
     }
 
     pub fn scan_token(&mut self) -> Result<Token, LexError> {
         self.start = self.current;
-    
-        let c = self.next();
+        let loc = self.get_loc();
 
+        let c = self.peek(); 
         if c.is_digit(10) {
             return self.number();
         } else if c.is_alphabetic() {
@@ -160,64 +159,64 @@ impl Lexer {
         } else if c == '"' {
             return self.string();
         }
-
-        match c {
-            '('  => Ok(self.make_token(LPAREN    )),
-            ')'  => Ok(self.make_token(RPAREN    )),
-            '{'  => Ok(self.make_token(LCURLY    )),
-            '}'  => Ok(self.make_token(RCURLY    )),
-            '['  => Ok(self.make_token(LSQUARE   )),
-            ']'  => Ok(self.make_token(RSQUARE   )),
-            ';'  => Ok(self.make_token(SEMICOLON )),
-            '+'  => Ok(self.make_token(PLUS      )),
-            '*'  => Ok(self.make_token(STAR      )),
-            '%'  => Ok(self.make_token(PERCENT   )),
-            '^'  => Ok(self.make_token(CARET     )),
-            '#'  => Ok(self.make_token(HASH     )),
-            ','  => Ok(self.make_token(COMMA     )),
-            '\0' => Ok(self.make_token(END       )),
-            '_'  => Ok(self.make_token(UNDERSCORE)),
+        
+        match self.next() {
+            '('  => Ok(self.make_token(LPAREN    , loc)),
+            ')'  => Ok(self.make_token(RPAREN    , loc)),
+            '{'  => Ok(self.make_token(LCURLY    , loc)),
+            '}'  => Ok(self.make_token(RCURLY    , loc)),
+            '['  => Ok(self.make_token(LSQUARE   , loc)),
+            ']'  => Ok(self.make_token(RSQUARE   , loc)),
+            ';'  => Ok(self.make_token(SEMICOLON , loc)),
+            '+'  => Ok(self.make_token(PLUS      , loc)),
+            '*'  => Ok(self.make_token(STAR      , loc)),
+            '%'  => Ok(self.make_token(PERCENT   , loc)),
+            '^'  => Ok(self.make_token(CARET     , loc)),
+            '#'  => Ok(self.make_token(HASH      , loc)),
+            ','  => Ok(self.make_token(COMMA     , loc)),
+            '\0' => Ok(self.make_token(END       , loc)),
+            '_'  => Ok(self.make_token(UNDERSCORE, loc)),
             ':'  => 
-                if self.expect(':') { Ok(self.make_token(DCOLON)) } 
-                else { Ok(self.make_token(COLON)) }
+                if self.expect(':') { Ok(self.make_token(DCOLON, loc)) } 
+                else { Ok(self.make_token(COLON, loc)) }
             '.'  => 
-                if self.expect('.') { Ok(self.make_token(TWODOT)) } 
-                else { Ok(self.make_token(DOT)) }
+                if self.expect('.') { Ok(self.make_token(TWODOT, loc)) } 
+                else { Ok(self.make_token(DOT, loc)) }
             '-' => 
-                if self.expect('>') { Ok(self.make_token(ARROW)) } 
-                else { Ok(self.make_token(MINUS)) }
+                if self.expect('>') { Ok(self.make_token(ARROW, loc)) } 
+                else { Ok(self.make_token(MINUS, loc)) }
             '&' =>
-                if self.expect('&') { Ok(self.make_token(DAMPERSAND)) } 
-                else { Ok(self.make_token(AMPERSAND)) }
+                if self.expect('&') { Ok(self.make_token(DAMPERSAND, loc)) } 
+                else { Ok(self.make_token(AMPERSAND, loc)) }
             '|' => 
-                if self.expect('|') { Ok(self.make_token(DVLINE)) } 
-                else if self.expect('>') { Ok(self.make_token(PIPE)) } 
-                else { Ok(self.make_token(VLINE)) },
+                if self.expect('|') { Ok(self.make_token(DVLINE, loc)) } 
+                else if self.expect('>') { Ok(self.make_token(PIPE, loc)) } 
+                else { Ok(self.make_token(VLINE, loc)) },
             '>' => 
-                if self.expect('=') { Ok(self.make_token(GREATEREQUAL)) } 
-                else { Ok(self.make_token(GREATER)) }
+                if self.expect('=') { Ok(self.make_token(GREATEREQUAL, loc)) } 
+                else { Ok(self.make_token(GREATER, loc)) }
             '<' => 
-                if self.expect('=') { Ok(self.make_token(LESSEQUAL)) } 
-                else { Ok(self.make_token(LESS)) }
+                if self.expect('=') { Ok(self.make_token(LESSEQUAL, loc)) } 
+                else { Ok(self.make_token(LESS, loc)) }
             '!' => 
-                if self.expect('=') { Ok(self.make_token(BANGEQUAL)) } 
-                else { Ok(self.make_token(BANG)) }
+                if self.expect('=') { Ok(self.make_token(BANGEQUAL, loc)) } 
+                else { Ok(self.make_token(BANG, loc)) }
             '=' => 
-                if self.expect('=') { Ok(self.make_token(DEQUAL)) } 
-                else { Ok(self.make_token(EQUAL)) }
+                if self.expect('=') { Ok(self.make_token(DEQUAL, loc)) } 
+                else { Ok(self.make_token(EQUAL, loc)) }
             '/' => 
                 if self.expect('/') {
                     while !(self.peek() == '\n'  
                         || self.peek() == '\0') {
                             self.next();
                     } 
-                    Ok(Token::new(COMMENT, self.source[self.start+2..self.current].to_string(), self.get_loc()))
-                } else { Ok(self.make_token(SLASH)) }
-            ' ' | '\t' | '\r' => Ok(self.make_token(WHITESPACE)), 
+                    Ok(Token::new(COMMENT, self.source[self.start+2..self.current].iter().collect(), loc))
+                } else { Ok(self.make_token(SLASH, loc)) }
+            ' ' | '\t' | '\r' => Ok(self.make_token(WHITESPACE, loc)), 
             '\n' => {
                 self.row += 1;
                 self.col = 1;
-                Ok(self.make_token(NEWLINE))
+                Ok(self.make_token(NEWLINE, loc))
             }
             // FIX 
             _ => Err(lex_error(
@@ -229,11 +228,11 @@ impl Lexer {
     }
 
     pub fn tokens(&mut self, source: String) -> Result<Vec<Token>, LexError> {
-        self.source = source + "\0";
+        self.source = (source + "\0").chars().collect::<Vec<_>>();
         self.start = 0; 
         self.current = 0;
         self.row = 1; 
-        self.col = 0;     
+        self.col = 1;     
         
         let mut tokens: Vec<Token> = vec![];
         
