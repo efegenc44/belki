@@ -15,9 +15,7 @@ pub enum Type {
     Range,
     Map,
     Module,
-
     Unit,
-    Void
 }
 
 impl Type {
@@ -35,9 +33,7 @@ impl Type {
             Type::Range => "Range".to_string(),
             Type::Map => "Map".to_string(),
             Type::Custom(cid) => interpreter.get_record(&cid).name.clone(),
-            
-            Type::Unit => "Unit".to_string(),
-            Type::Void => "Void".to_string(),
+            Type::Unit => "Nothing".to_string(),
         }
     }
 }
@@ -53,7 +49,6 @@ pub enum KeyValue {
     Range(i32, i32),
     Module(usize),
     Type(Type),
-
     Nothing, // Unit
 }
 
@@ -72,9 +67,7 @@ pub enum Value {
     Map(usize),
     Module(usize),
     Type(Type),
-
     Nothing, // Unit
-    None,    // Void
 }
 
 impl Value {
@@ -92,9 +85,7 @@ impl Value {
             Value::Map(_)            => Type::Map,
             Value::Module(_)         => Type::Module,
             Value::Type(_)           => Type::Type,
-            
             Value::Nothing           => Type::Unit,
-            Value::None              => Type::Void // ?
         }
     }
     
@@ -104,10 +95,9 @@ impl Value {
             
             Value::Int(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
-            Value::String(s) => format!("'{}'", s.clone()),
+            Value::String(s) => s.clone(),
             Value::Bool(b) => if *b { "true".to_string() } else { "false".to_string() },
             Value::Nothing => "nothing".to_string(),
-            Value::None => "none".to_string(), // ?
             Value::List(id) => {
                 let mut s = String::from("[");
                 let mut first = true;

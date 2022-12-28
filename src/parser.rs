@@ -66,11 +66,13 @@ fn parse_error(msg: String, loc: Location) -> ParseError {
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
+    in_function: usize,
+    in_loop: usize,
 }
 
 impl Parser {
     pub fn new() -> Parser {
-        Parser { tokens: vec![], current: 0 }
+        Parser { tokens: vec![], current: 0, in_function: 0, in_loop: 0 }
     }
 
     fn next(&mut self) -> Token {
@@ -180,6 +182,7 @@ impl Parser {
                 }
             },
             FUN => {
+                self.in_loop += 1;
                 let mut args = vec![];
                 if self.peek().kind == LPAREN {
                     self.consume(LPAREN)?;
@@ -197,6 +200,7 @@ impl Parser {
                 } else {
                     body = Box::new(self.expression()?);
                 }
+                self.in_loop -= 1;
                 Node::FunctionDeclaration { name: "".into(), args, body, loc: t.loc }
             },
             IF => {
@@ -413,8 +417,12 @@ impl Parser {
 
     // <while statement> ::= 'while' <expression> <statement>
     fn while_statement(&mut self) -> Result<Node, ParseError> {
+        self.in_loop += 1;
         let loc = self.consume(WHILE)?.loc;
-        Ok(Node::WhileStatement { expr: Box::new(self.expression()?), body: Box::new(self.statement()?), loc })
+        let expr = Box::new(self.expression()?);
+        let body = Box::new(self.statement()?);
+        self.in_loop -= 1;
+        Ok(Node::WhileStatement { expr, body, loc })
     }
 
     // <if statement> ::= 'if' <expression> <statement> [<else>]
@@ -423,7 +431,7 @@ impl Parser {
         Ok(Node::IfStatement { 
             expr: Box::new(self.expression()?), 
             body: Box::new(self.statement()?), 
-            els: if self.peek().kind == ELSE { Box::new(self.els()?) } else { Box::new(Node::None) },
+            els: if self.peek().kind == ELSE { Box::new(self.els()?) } else { Box::new(Node::Nothing(loc.clone())) },
             loc 
         })
     }
@@ -436,6 +444,7 @@ impl Parser {
 
     // <fun declaration> ::= 'fun' <identifier> ['(' (<identifier> ',')* [<identifier>] ')'] (<block> | <expression>) 
     fn fun_declaration(&mut self) -> Result<Node, ParseError> {
+        self.in_function += 1;
         let loc = self.consume(FUN)?.loc;
         let name = self.consume(IDENTIFIER)?.text;
         let mut args = vec![];
@@ -455,6 +464,7 @@ impl Parser {
         } else {
             body = Box::new(self.expression()?);
         }
+        self.in_function -= 1;
         Ok(Node::FunctionDeclaration { name, args, body, loc })
     }
     
@@ -477,6 +487,10 @@ impl Parser {
     // <return statement> ::= 'return' <expression>
     fn return_statement(&mut self) -> Result<Node, ParseError> {
         let loc = self.consume(RETURN)?.loc;
+        if !(self.in_function > 0) {
+            return Err(parse_error("Return outside of a function".to_string(), loc));
+        }
+
         Ok(Node::Return(Box::new(self.expression()?), loc))
     }
 
@@ -498,22 +512,32 @@ impl Parser {
     // <break statement> ::= 'break'
     fn break_statement(&mut self) -> Result<Node, ParseError> {
         let loc = self.consume(BREAK)?.loc;
+        if !(self.in_loop > 0) {
+            return Err(parse_error("Break outside of a loop".to_string(), loc));
+        }
+
         Ok(Node::Break(loc))
     }
 
     // <continue statement> ::= 'continue'
     fn continue_statement(&mut self) -> Result<Node, ParseError> {
         let loc = self.consume(CONTINUE)?.loc;
+        if !(self.in_loop > 0) {
+            return Err(parse_error("Continue outside of a loop".to_string(), loc));
+        }
+
         Ok(Node::Continue(loc))
     }
 
     // <for statement> ::= 'for' <identifier> ':' <expression> <statement>
     fn for_statement(&mut self) -> Result<Node, ParseError> {
+        self.in_loop += 1;
         let loc = self.consume(FOR)?.loc;
         let var = self.consume(IDENTIFIER)?.text;
         self.consume(COLON)?;
         let iter = Box::new(self.expression()?);
         let body = Box::new(self.statement()?);
+        self.in_loop -= 1;
         Ok(Node::ForStatement { var, iter, body, loc })
     }
 

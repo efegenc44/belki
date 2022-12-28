@@ -81,7 +81,6 @@ pub enum Node {
     True(Location),
     False(Location),
     Nothing(Location),
-    None
 }
 
 impl Node {
@@ -115,7 +114,6 @@ impl Node {
             Node::True(loc)                                                => loc.clone(),
             Node::False(loc)                                               => loc.clone(),
             Node::Nothing(loc)                                             => loc.clone(),
-            Node::None                                                     => unreachable!(),
         }
     }
 }

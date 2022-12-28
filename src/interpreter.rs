@@ -414,22 +414,16 @@ impl Interpreter {
 
     pub fn eval(&mut self, node: Node) -> EvalResult {
         match node.clone() {
-            Node::Module(statements, loc) => {
+            Node::Module(statements, _loc) => {
                 for statement in statements {
                     match self.eval(statement) {
-                        Ok(v) => if self.repl && v != Value::None {
+                        Ok(v) => if self.repl && v != Value::Nothing {
                             println!("{}", v.get_string(self));
                         },
-                        // FIX
-                        Err(err) => match err {
-                            State::Return(_) => return Err(State::Error(runtime_error("Return only allowed in function bodies".to_string(), loc))),
-                            State::Continue  => return Err(State::Error(runtime_error("Continue only allowed in while or for bodies".to_string(), loc))),
-                            State::Break     => return Err(State::Error(runtime_error("Break only allowed in while or for bodies".to_string(), loc))),
-                            State::Error(_)  => return Err(err)
-                        }
+                        Err(err) => return Err(err)
                     }
                 } 
-                Ok(Value::None)
+                Ok(Value::Nothing)
             },
             Node::Block(statements, _loc) => {
                 self.enter_scope();
@@ -439,7 +433,7 @@ impl Interpreter {
                     }
                 }
                 self.exit_scope();
-                Ok(Value::None)
+                Ok(Value::Nothing)
             },
             Node::ModuleDeclaration { name, body, loc: _ } => {
                 self.enter_scope();
@@ -453,12 +447,12 @@ impl Interpreter {
                 self.exit_scope();
                 
                 self.add_module(false, scope, name);
-                Ok(Value::None)
+                Ok(Value::Nothing)
             }
             Node::Import(path, _loc) => {
                 if path == "math" {
                     math_module::init(self);
-                    return Ok(Value::None);
+                    return Ok(Value::Nothing);
                 }
                 
                 let source = fs::read_to_string(path.clone())
@@ -491,7 +485,7 @@ impl Interpreter {
                     .split(".").collect::<Vec<_>>()[0].to_string();
                 
                 self.add_module(false, scope, name);
-                Ok(Value::None)
+                Ok(Value::Nothing)
             },
             Node::MapLiteral(map, _loc) => {
                 let mut hmap = HashMap::new();
@@ -571,12 +565,12 @@ impl Interpreter {
                         iter.get_loc()
                     ))),
                 }
-                Ok(Value::None)
+                Ok(Value::Nothing)
             }
             Node::LetStatement { name, expr, loc } => {
                 let val = self.eval(*expr)?;
                 if !self.current_scope.env.contains_key(&name) {
-                    self.current_scope.env.insert(name, val); Ok(Value::None)
+                    self.current_scope.env.insert(name, val); Ok(Value::Nothing)
                 } else { 
                     Err(State::Error(runtime_error(
                         format!("Variable '{}' already defined", name),
@@ -598,7 +592,7 @@ impl Interpreter {
             }
             Node::RecordDeclaration { name, members, loc: _ } => {
                 self.add_record(false, Record {name, members});
-                Ok(Value::None)                
+                Ok(Value::Nothing)                
             },
             Node::FunctionDeclaration { name, args, body, loc: _ } => {
                 let closure = if let Some(_) = self.current_scope.upper {
@@ -606,7 +600,7 @@ impl Interpreter {
                 } else { None };
                 if !name.is_empty() {
                     self.add_function(Function { name, args, body: *body, closure });
-                    Ok(Value::None)
+                    Ok(Value::Nothing)
                 } else {
                     let fname ="lambda".into();
                     self.add_function(Function { name: fname, args, body: *body, closure });
@@ -632,11 +626,11 @@ impl Interpreter {
                             Ok(_) => {},
                             Err(s) => match s {
                                 State::Continue => continue,
-                                State::Break => break Ok(Value::None),
+                                State::Break => break Ok(Value::Nothing),
                                 _ => return Err(s)
                             }
                         };
-                    } else { return Ok(Value::None) }
+                    } else { return Ok(Value::Nothing) }
                     _ => return Err(State::Error(runtime_error(
                         format!("Expected Bool at While Statement, got '{}'", val.get_type().get_string(self)),
                         expr.get_loc()
@@ -924,7 +918,6 @@ impl Interpreter {
             Node::True(_loc)              => Ok(Value::Bool(true)),
             Node::False(_loc)             => Ok(Value::Bool(false)),
             Node::Nothing(_loc)           => Ok(Value::Nothing),
-            Node::None                   => Ok(Value::None),
             Node::Break(_loc)             => Err(State::Break),
             Node::Continue(_loc)          => Err(State::Continue),
             Node::Group(expr, _loc)       => self.eval(*expr),
