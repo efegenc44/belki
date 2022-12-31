@@ -1,4 +1,4 @@
-import "tests/class_a.dipl"
+import "tests/class_a.belki"
 
 let o = class_a.A(7)
 
