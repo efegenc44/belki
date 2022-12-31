@@ -24,7 +24,7 @@ fn repl() {
     interpreter.repl_mode();
     loop {
         let mut line = String::new();
-        print!("dipl > "); 
+        print!("belki > "); 
         let _ = stdout().flush();
         let _ = stdin().read_line(&mut line).unwrap();
         line = line.trim_end().to_string();
@@ -104,6 +104,6 @@ fn main() {
         }
     } 
     else {
-        println!("\n  Usage: ./dipl <file-path>");
+        println!("\n  Usage: ./belki <file-path>");
     }
 }

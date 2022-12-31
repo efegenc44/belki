@@ -1,6 +1,4 @@
-# dipl
-
-**D**ynamic, **I**nterpreted, **P**rogramming **L**anguage
+# belki
 
 ## Quick Start
 
@@ -8,15 +6,15 @@
 
 ### For examples see [here](examples)
 
-| Run REPL | Run from file   |
-|----------|-----------------|
-| `./dipl` | `./dipl <file>` |
+| Run REPL  | Run from file    |
+|-----------|------------------|
+| `./belki` | `./belki <file>` |
 
 ---
 
 ### Hello, World
 
-```
+```belki
 print("Hello, World!") 
 // or
 "Hello, World!" |> print
@@ -26,7 +24,7 @@ print("Hello, World!")
 
 ### Recursive Fibanocci
 
-```
+```belki
 fun fib(n) {
     if n <= 2
         return 1

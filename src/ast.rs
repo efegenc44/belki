@@ -118,7 +118,7 @@ impl Node {
     }
 }
 
-/*
+
 #[allow(dead_code)]
 impl Node {
     pub fn print(&self, indent: usize) {
@@ -129,56 +129,56 @@ impl Node {
         }
         print_spaces(indent);
         match self {
-            Node::Block(statements) => {
+            Node::Block(statements, _loc) => {
                 println!("block");
                 for statement in statements {
                     statement.print(indent + 1);
                 }
             },
-            Node::Module(statements) => {
+            Node::Module(statements, _loc) => {
                 println!("program");
                 for statement in statements {
                     statement.print(indent + 1);
                 }
             },
-            Node::Import(path) => {
+            Node::Import(path, _loc) => {
                 println!("import");
                 print_spaces(indent + 1);
                 println!("{}", path);
             },
-            Node::MapLiteral(map) => {
+            Node::MapLiteral(map, _loc) => {
                 println!("map");
                 for (key, value) in map {
                     key.print(indent + 1);
                     value.print(indent + 1);
                 } 
             },
-            Node::ModuleDeclaration { name, body } => {
+            Node::ModuleDeclaration { name, body, loc: _ } => {
                 println!("module");
                 print_spaces(indent + 1);
                 println!("{}", name);
                 body.print(indent + 1);
             }
-            Node::ForStatement { var, iter, body } => {
+            Node::ForStatement { var, iter, body, loc: _ } => {
                 println!("for");
                 print_spaces(indent + 1);
                 println!("{}", var);
                 iter.print(indent + 1);
                 body.print(indent + 1);
             }
-            Node::LetStatement { name, expr } => {
+            Node::LetStatement { name, expr, loc: _ } => {
                 println!("let");
                 print_spaces(indent + 1);
                 println!("{}", name);
                 expr.print(indent + 1);
             },
-            Node::Return(expr) => {
+            Node::Return(expr, _loc) => {
                 println!("return");
                 expr.print(indent + 1);
             },
-            Node::Break => println!("break"),
-            Node::Continue => println!("continue"),
-            Node::RecordDeclaration { name, members } => {
+            Node::Break(_loc) => println!("break"),
+            Node::Continue(_loc) => println!("continue"),
+            Node::RecordDeclaration { name, members, loc: _ } => {
                 println!("class");
                 print_spaces(indent + 1);
                 println!("{}", name);
@@ -188,7 +188,7 @@ impl Node {
                 }
                 let _ = stdout().flush();
             },
-            Node::FunctionDeclaration { name, args, body } => {
+            Node::FunctionDeclaration { name, args, body, loc: _ } => {
                 println!("fun");
                 print_spaces(indent + 1);
                 println!("{}", name);
@@ -200,60 +200,58 @@ impl Node {
                 println!();
                 body.print(indent + 1);
             },
-            Node::IfStatement { expr, body, els } => {
+            Node::IfStatement { expr, body, els, loc: _ } => {
                 println!("if");
                 expr.print(indent + 1);
                 body.print(indent + 1);
                 els.print(indent + 1);
             },
-            Node::IfExpression { cond, tru, fals } => {
+            Node::IfExpression { cond, tru, fals, loc: _ } => {
                 println!("if expr");
                 cond.print(indent + 1);
                 tru.print(indent + 1);
                 fals.print(indent + 1);
             },  
-            Node::WhileStatement { expr, body } => {
+            Node::WhileStatement { expr, body, loc: _ } => {
                 println!("while");
                 expr.print(indent + 1);
                 body.print(indent + 1);
             },
-            Node::BinaryExpression { op, lhs, rhs } => {
+            Node::BinaryExpression { op, lhs, rhs, loc: _ } => {
                 println!("binary");
                 print_spaces(indent + 1);
                 println!("{}", op);
                 lhs.print(indent + 2);
                 rhs.print(indent + 2);
             },
-            Node::ListLiteral(list) => {
+            Node::ListLiteral(list, _loc) => {
                 println!("list");
                 for element in list {
                     element.print(indent + 1)
                 }
             },
-            Node::UnaryExpression { op, operand } => {
+            Node::UnaryExpression { op, operand, loc: _ } => {
                 println!("unary");    
                 print_spaces(indent + 1);
                 println!("{}", op);    
                 operand.print(indent + 1);
             },
-            Node::Application { fun, args } => {
+            Node::Application { fun, args, loc: _ } => {
                 println!("Fun Call");    
                 fun.print(indent + 1);
                 for arg in args {
                     arg.print(indent + 1);
                 } 
             },
-            Node::StringLiteral(s)     => println!("\"{}\"", s),
-            Node::Identifier(s) => println!("{}", s),    
-            Node::Group(node)   => node.print(indent + 1),    
-            Node::IntegerLiteral(i)    => println!("{}", i),
-            Node::FloatLiteral(i)      => println!("{}", i),
-            Node::True          => println!("true"),       
-            Node::False         => println!("false"),      
-            Node::Nothing       => println!("Nothing"),        
-            Node::None          => println!("None") 
+            Node::StringLiteral(s, _loc)     => println!("\"{}\"", s),
+            Node::Identifier(s, _loc)        => println!("{}", s),    
+            Node::Group(node, _loc)          => node.print(indent + 1),    
+            Node::IntegerLiteral(i, _loc)    => println!("{}", i),
+            Node::FloatLiteral(i, _loc)      => println!("{}", i),
+            Node::True(_loc)                 => println!("true"),       
+            Node::False(_loc)                => println!("false"),      
+            Node::Nothing(_loc)              => println!("Nothing"),        
         }
     }
 
 }
-*/
